@@ -7,6 +7,7 @@ const { applyLayout } = require('./windowLayoutEngine');
 const { bindHotkeys, unbindAll } = require('./focusController');
 const { focusWindow } = require('./win32/windowOps');
 const { createBadge, destroyBadge, startTracking, stopTracking, overlays } = require('./overlayManager');
+const hoverFocus = require('./hoverFocus');
 
 // Single instance — two Sunkists would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
@@ -138,10 +139,27 @@ app.whenReady().then(() => {
     });
   }
 
+  // Only activate if user has explicitly enabled it in settings
+  if (workspace.hoverFocusEnabled) {
+    hoverFocus.start(() => workspace.sessions, {
+      delayMs: workspace.hoverFocusDelayMs || 400,
+    });
+  }
+
+  // IPC to toggle from settings UI
+  ipcMain.handle('settings:setHoverFocus', (_e, { enabled, delayMs }) => {
+    workspace.hoverFocusEnabled = enabled;
+    workspace.hoverFocusDelayMs = delayMs || 400;
+    saveWorkspace(workspace);
+    if (enabled) hoverFocus.start(() => workspace.sessions, { delayMs });
+    else hoverFocus.stop();
+    return { ok: true };
+  });
+
   // Remaining handlers added in later tasks
 });
 
-app.on('before-quit', () => { stopTracking(); unbindAll(); });
+app.on('before-quit', () => { stopTracking(); hoverFocus.stop(); unbindAll(); });
 app.on('window-all-closed', () => app.quit());
 
 module.exports = { workspace };
