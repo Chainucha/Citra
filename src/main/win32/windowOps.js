@@ -22,17 +22,24 @@ function findWindowsByPid(targetPid) {
     return 1; // continue enumeration
   }, koffi.pointer(w.EnumWindowsProc));
 
-  w.EnumWindows(cb, 0);
-  koffi.unregister(cb);
+  try {
+    w.EnumWindows(cb, 0);
+  } finally {
+    koffi.unregister(cb);
+  }
   return handles;
 }
 
 /**
  * Poll until at least one browser window appears for pid (browsers take 800–2000ms).
+ * Pass childProcess (ChildProcess) for early abort if the process dies before window appears.
  */
-async function waitForWindow(pid, { timeoutMs = 10_000, pollMs = 200 } = {}) {
+async function waitForWindow(pid, { timeoutMs = 10_000, pollMs = 200, childProcess = null } = {}) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    if (childProcess && childProcess.exitCode !== null) {
+      throw new Error(`Process PID ${pid} exited (code ${childProcess.exitCode}) before window appeared`);
+    }
     const found = findWindowsByPid(pid);
     if (found.length > 0) return found[0];
     await new Promise(r => setTimeout(r, pollMs));
@@ -57,6 +64,7 @@ function getRect(hwnd) {
 /** Reliably bring window to foreground using AttachThreadInput. */
 function focusWindow(hwnd) {
   const fg = w.GetForegroundWindow();
+  if (fg === hwnd) return;          // already foreground, nothing to do
   if (!fg) { w.SetForegroundWindow(hwnd); return; }
 
   const fgPidOut = [0];

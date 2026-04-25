@@ -29,6 +29,8 @@ const EnumWindows = user32.func('__stdcall', 'EnumWindows', BOOL, [
 const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProcessId', DWORD, [
   HWND, koffi.out(koffi.pointer(DWORD)),
 ]);
+// Buffer passed as raw memory region — koffi accepts Buffer for out pointer(uint16).
+// If koffi version changes and this breaks, switch to koffi.array('uint16', 260).
 const GetClassName = user32.func('__stdcall', 'GetClassNameW', 'int', [
   HWND, koffi.out(koffi.pointer('uint16')), 'int',
 ]);
