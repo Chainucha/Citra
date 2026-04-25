@@ -1,0 +1,29 @@
+appId: com.sunkist.windowmanager
+productName: Sunkist
+copyright: Copyright © 2026
+
+directories:
+  output: dist
+
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+files:
+  - src/**
+  - assets/**
+  - node_modules/**
+  - package.json
+  - "!node_modules/uiohook-napi/**"
+
+extraMetadata:
+  main: src/main/index.js
