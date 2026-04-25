@@ -9,5 +9,9 @@ contextBridge.exposeInMainWorld('sunkist', {
   addSession:      (name)   => ipcRenderer.invoke(CH.ADD_SESSION,    { name }),
   focusSession:    (id)     => ipcRenderer.invoke(CH.FOCUS_SESSION,  { id }),
   saveWorkspace:   (data)   => ipcRenderer.invoke(CH.SAVE_WORKSPACE, data),
-  onSessionChanged:(cb)     => ipcRenderer.on(CH.SESSION_STATE_CHANGED, (_e, s) => cb(s)),
+  onSessionChanged:(cb) => {
+    const handler = (_e, s) => cb(s);
+    ipcRenderer.on(CH.SESSION_STATE_CHANGED, handler);
+    return () => ipcRenderer.removeListener(CH.SESSION_STATE_CHANGED, handler);
+  },
 });

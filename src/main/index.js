@@ -1,3 +1,4 @@
+const { randomUUID } = require('crypto');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const Store = require('electron-store').default;
@@ -21,7 +22,7 @@ function loadWorkspace() {
     return saved;
   }
   return {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     name: 'Default',
     sessions: [],
     activePreset: 'split-h-50',
@@ -52,7 +53,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle(CH.ADD_SESSION, (_e, { name }) => {
     const session = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       name,
       browserPath: null,   // null = auto-detect Chrome
       url: 'https://universe.flyff.com/play',
@@ -79,6 +80,8 @@ app.whenReady().then(() => {
   // Remaining handlers added in later tasks
 });
 
-app.on('window-all-closed', () => { /* overlay windows closing is OK */ });
+app.on('window-all-closed', () => {
+  if (!dashboard || dashboard.isDestroyed()) app.quit();
+});
 
 module.exports = { workspace };
