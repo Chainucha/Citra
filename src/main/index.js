@@ -7,6 +7,7 @@ const { launchSession, closeSession } = require('./browserInstanceManager');
 const { applyLayout } = require('./windowLayoutEngine');
 const { bindHotkeys, unbindAll } = require('./focusController');
 const { focusWindow } = require('./win32/windowOps');
+const { createBadge, destroyBadge, startTracking, overlays } = require('./overlayManager');
 
 // Single instance — two Sunkists would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
@@ -106,6 +107,8 @@ app.whenReady().then(() => {
     }
 
     safeSend(CH.SESSION_STATE_CHANGED, { ...session });
+    if (workspace.overlayVisible) createBadge(session);
+    startTracking(() => workspace.sessions, 250);
     rebindHotkeys();
     return { ok: true };
   });
@@ -117,6 +120,7 @@ app.whenReady().then(() => {
     session.hwnd  = null;
     session.pid   = null;
     session.state = 'idle';
+    destroyBadge(id);
     safeSend(CH.SESSION_STATE_CHANGED, { ...session });
     rebindHotkeys();
     return { ok: true };
@@ -146,6 +150,16 @@ app.whenReady().then(() => {
     session.state = 'active';
     workspace.sessions.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
     return { ok: true };
+  });
+
+  ipcMain.on(CH.OVERLAY_INTERACTIVE, (_e, { sessionId, on }) => {
+    const win = overlays.get(sessionId);
+    if (win && !win.isDestroyed()) win.setIgnoreMouseEvents(!on, { forward: true });
+  });
+
+  ipcMain.on(CH.OVERLAY_FOCUS, (_e, { sessionId }) => {
+    const session = workspace.sessions.find(s => s.id === sessionId);
+    if (session?.hwnd) focusWindow(session.hwnd);
   });
 
   function rebindHotkeys() {

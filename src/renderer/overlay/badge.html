@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'" />
+  <link rel="stylesheet" href="badge.css" />
+</head>
+<body>
+  <div id="badge">
+    <div class="header">
+      <span id="dot" class="dot"></span>
+      <span id="label"></span>
+      <button id="btn-focus" title="Focus window">&#9654;</button>
+    </div>
+    <div id="timer-row">
+      <span id="timer-display">--</span>
+      <button id="btn-timer">+30s</button>
+      <button id="btn-reset">&#x21BA;</button>
+    </div>
+  </div>
+  <script src="badge.js"></script>
+</body>
+</html>
