@@ -47,7 +47,9 @@ function destroyBadge(sessionId) {
 
 function positionBadge(session) {
   const win = overlays.get(session.id);
-  if (!win || win.isDestroyed() || !session.hwnd) return;
+  if (!win) return;
+  if (win.isDestroyed()) { overlays.delete(session.id); return; }
+  if (!session.hwnd) return;
   try {
     const r = getRect(session.hwnd);
     win.setBounds({ x: r.x + 8, y: r.y + 8, width: 220, height: 100 });
@@ -55,7 +57,7 @@ function positionBadge(session) {
 }
 
 function startTracking(getSessions, intervalMs = 250) {
-  if (trackingInterval) clearInterval(trackingInterval);
+  if (trackingInterval) return; // already tracking, existing interval covers all sessions
   trackingInterval = setInterval(() => {
     getSessions().forEach(s => { if (s.hwnd) positionBadge(s); });
   }, intervalMs);

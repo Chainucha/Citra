@@ -26,8 +26,10 @@ function tick() {
 
 document.getElementById('btn-timer').addEventListener('click', () => {
   remaining = (remaining > 0 ? remaining : 0) + 30;
+  const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+  const s = String(remaining % 60).padStart(2, '0');
+  document.getElementById('timer-display').textContent = `${m}:${s}`;
   if (!countdown) countdown = setInterval(tick, 1000);
-  tick();
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => {

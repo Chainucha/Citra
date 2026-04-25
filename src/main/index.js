@@ -7,7 +7,7 @@ const { launchSession, closeSession } = require('./browserInstanceManager');
 const { applyLayout } = require('./windowLayoutEngine');
 const { bindHotkeys, unbindAll } = require('./focusController');
 const { focusWindow } = require('./win32/windowOps');
-const { createBadge, destroyBadge, startTracking, overlays } = require('./overlayManager');
+const { createBadge, destroyBadge, startTracking, stopTracking, overlays } = require('./overlayManager');
 
 // Single instance — two Sunkists would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
@@ -177,7 +177,7 @@ app.whenReady().then(() => {
   // Remaining handlers added in later tasks
 });
 
-app.on('before-quit', () => unbindAll());
+app.on('before-quit', () => { stopTracking(); unbindAll(); });
 app.on('window-all-closed', () => app.quit());
 
 module.exports = { workspace };
