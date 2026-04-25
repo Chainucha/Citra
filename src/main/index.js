@@ -140,6 +140,11 @@ app.whenReady().then(() => {
     const session = workspace.sessions.find(s => s.id === id);
     if (!session?.hwnd) return { error: 'Session has no tracked window' };
     focusWindow(session.hwnd);
+    workspace.sessions.forEach(s => {
+      if (s.state === 'active') s.state = 'arranged';
+    });
+    session.state = 'active';
+    workspace.sessions.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
     return { ok: true };
   });
 
