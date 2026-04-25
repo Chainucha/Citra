@@ -1,25 +1,34 @@
-// Minimal bootstrap — wired up fully in Task 8
+let currentSessions = [];
+
+window.sunkist.onSessionChanged((updated) => {
+  const idx = currentSessions.findIndex(s => s.id === updated.id);
+  if (idx >= 0) currentSessions[idx] = updated;
+  renderSessions(currentSessions);
+});
+
 async function init() {
   const workspace = await window.sunkist.getWorkspace();
-  renderSessions(workspace.sessions);
+  currentSessions = workspace.sessions;
+  renderSessions(currentSessions);
 }
 
 function renderSessions(sessions) {
   const list = document.getElementById('session-list');
   list.innerHTML = sessions.map(s => `
-    <li>
+    <li data-id="${s.id}">
       <span class="dot" style="background:${s.accentColor}"></span>
       <span>${s.name}</span>
+      <span class="state">${s.state}</span>
     </li>
   `).join('');
 }
 
 document.getElementById('btn-add').addEventListener('click', async () => {
-  const name = prompt('Session name:', `Account ${Date.now()}`);
+  const name = prompt('Session name:', `Account ${currentSessions.length + 1}`);
   if (!name) return;
-  await window.sunkist.addSession(name);
-  const workspace = await window.sunkist.getWorkspace();
-  renderSessions(workspace.sessions);
+  const session = await window.sunkist.addSession(name);
+  currentSessions.push(session);
+  renderSessions(currentSessions);
 });
 
 init();

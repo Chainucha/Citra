@@ -3,6 +3,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const Store = require('electron-store').default;
 const CH = require('../shared/ipc-channels');
+const { launchSession, closeSession } = require('./browserInstanceManager');
 
 // Single instance — two Sunkists would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
@@ -75,6 +76,38 @@ app.whenReady().then(() => {
     };
     store.set('workspace', toSave);
     return true;
+  });
+
+  ipcMain.handle(CH.LAUNCH_SESSION, async (_e, { id }) => {
+    const session = workspace.sessions.find(s => s.id === id);
+    if (!session) return { error: 'Session not found' };
+
+    session.state = 'launching';
+    dashboard.webContents.send(CH.SESSION_STATE_CHANGED, { ...session });
+
+    try {
+      const { pid, hwnd } = await launchSession(session);
+      session.pid   = pid;
+      session.hwnd  = hwnd;
+      session.state = 'tracking';
+    } catch (err) {
+      session.state = 'idle';
+      return { error: err.message };
+    }
+
+    dashboard.webContents.send(CH.SESSION_STATE_CHANGED, { ...session });
+    return { ok: true };
+  });
+
+  ipcMain.handle(CH.CLOSE_SESSION, (_e, { id }) => {
+    const session = workspace.sessions.find(s => s.id === id);
+    if (!session) return;
+    closeSession(session);
+    session.hwnd  = null;
+    session.pid   = null;
+    session.state = 'idle';
+    dashboard.webContents.send(CH.SESSION_STATE_CHANGED, { ...session });
+    return { ok: true };
   });
 
   // Remaining handlers added in later tasks

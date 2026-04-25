@@ -13,3 +13,6 @@ body { background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
 #btn-add { background: transparent; border: 1px solid #333; color: #888;
            padding: 4px 8px; cursor: pointer; font-size: 12px; }
 #main-panel { flex: 1; padding: 24px; overflow-y: auto; }
+.state { font-size: 10px; color: #888; margin-left: auto; }
+li[data-id] { cursor: pointer; }
+li[data-id]:hover .state { color: #f59e0b; }
