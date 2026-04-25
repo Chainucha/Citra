@@ -16,7 +16,16 @@
       <button id="btn-add">+ Add Session</button>
     </aside>
     <main id="main-panel">
-      <p style="color:#888; margin-top:40px; text-align:center">Loading…</p>
+      <section id="layout-section">
+        <p class="section-label">LAYOUT</p>
+        <div class="preset-row">
+          <button class="preset-btn" data-preset="split-h-50">50/50 H</button>
+          <button class="preset-btn" data-preset="split-v-50">50/50 V</button>
+          <button class="preset-btn" data-preset="split-h-70">70/30 H</button>
+          <button class="preset-btn" data-preset="split-v-70">70/30 V</button>
+        </div>
+        <button id="btn-apply">Apply Layout</button>
+      </section>
     </main>
   </div>
   <script src="app.js"></script>

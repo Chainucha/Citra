@@ -16,3 +16,10 @@ body { background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
 .state { font-size: 10px; color: #888; margin-left: auto; }
 li[data-id] { cursor: pointer; }
 li[data-id]:hover .state { color: #f59e0b; }
+#layout-section { margin-top: 24px; }
+.preset-row { display: flex; gap: 8px; margin: 8px 0; }
+.preset-btn { background: #0f3460; border: none; color: #fff; padding: 8px 12px;
+              cursor: pointer; border-radius: 4px; font-size: 12px; }
+.preset-btn.active { background: #f59e0b; color: #000; }
+#btn-apply { background: #0f3460; border: none; color: #fff; padding: 10px 20px;
+             cursor: pointer; border-radius: 4px; font-weight: 600; }

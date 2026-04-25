@@ -32,3 +32,18 @@ document.getElementById('btn-add').addEventListener('click', async () => {
 });
 
 init();
+
+let selectedPreset = 'split-h-50';
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectedPreset = btn.dataset.preset;
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+document.getElementById('btn-apply').addEventListener('click', async () => {
+  const result = await window.sunkist.applyLayout(selectedPreset);
+  if (result.error) alert(result.error);
+});

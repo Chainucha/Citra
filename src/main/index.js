@@ -4,6 +4,7 @@ const path = require('path');
 const Store = require('electron-store').default;
 const CH = require('../shared/ipc-channels');
 const { launchSession, closeSession } = require('./browserInstanceManager');
+const { applyLayout } = require('./windowLayoutEngine');
 
 // Single instance — two Sunkists would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
@@ -115,6 +116,20 @@ app.whenReady().then(() => {
     session.state = 'idle';
     safeSend(CH.SESSION_STATE_CHANGED, { ...session });
     return { ok: true };
+  });
+
+  ipcMain.handle(CH.APPLY_LAYOUT, (_e, { preset }) => {
+    workspace.activePreset = preset || workspace.activePreset;
+    const active = workspace.sessions.filter(s => s.hwnd);
+    if (active.length === 0) return { error: 'No tracked windows to arrange' };
+    try {
+      applyLayout(workspace.activePreset, active);
+      active.forEach(s => { s.state = 'arranged'; });
+      active.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
+      return { ok: true };
+    } catch (err) {
+      return { error: err.message };
+    }
   });
 
   // Remaining handlers added in later tasks
