@@ -34,6 +34,12 @@ function loadWorkspace() {
 
 let dashboard;
 
+function safeSend(channel, payload) {
+  if (dashboard && !dashboard.isDestroyed()) {
+    dashboard.webContents.send(channel, payload);
+  }
+}
+
 function createDashboard() {
   dashboard = new BrowserWindow({
     width: 980, height: 640,
@@ -81,9 +87,10 @@ app.whenReady().then(() => {
   ipcMain.handle(CH.LAUNCH_SESSION, async (_e, { id }) => {
     const session = workspace.sessions.find(s => s.id === id);
     if (!session) return { error: 'Session not found' };
+    if (session.state !== 'idle') return { error: 'Session already active' };
 
     session.state = 'launching';
-    dashboard.webContents.send(CH.SESSION_STATE_CHANGED, { ...session });
+    safeSend(CH.SESSION_STATE_CHANGED, { ...session });
 
     try {
       const { pid, hwnd } = await launchSession(session);
@@ -95,26 +102,24 @@ app.whenReady().then(() => {
       return { error: err.message };
     }
 
-    dashboard.webContents.send(CH.SESSION_STATE_CHANGED, { ...session });
+    safeSend(CH.SESSION_STATE_CHANGED, { ...session });
     return { ok: true };
   });
 
   ipcMain.handle(CH.CLOSE_SESSION, (_e, { id }) => {
     const session = workspace.sessions.find(s => s.id === id);
-    if (!session) return;
+    if (!session || session.state === 'idle') return { ok: true };
     closeSession(session);
     session.hwnd  = null;
     session.pid   = null;
     session.state = 'idle';
-    dashboard.webContents.send(CH.SESSION_STATE_CHANGED, { ...session });
+    safeSend(CH.SESSION_STATE_CHANGED, { ...session });
     return { ok: true };
   });
 
   // Remaining handlers added in later tasks
 });
 
-app.on('window-all-closed', () => {
-  if (!dashboard || dashboard.isDestroyed()) app.quit();
-});
+app.on('window-all-closed', () => app.quit());
 
 module.exports = { workspace };
