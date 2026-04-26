@@ -1,10 +1,10 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const CH = require('../shared/ipc-channels');
 const { loadWorkspace, saveWorkspace, addSession } = require('./workspaceController');
-const { ensureContainer, sendToContainer, getContainerHwnd, destroyContainer, isContainerAlive } = require('./browserInstanceManager');
+const { ensureContainer, sendToContainer, getContainerHwnd, destroyContainer, isContainerAlive, maximizeContainer } = require('./browserInstanceManager');
 const { bindHotkeys, unbindAll } = require('./focusController');
-const { focusWindow, placeWindow } = require('./win32/windowOps');
+const { focusWindow } = require('./win32/windowOps');
 const { stopTracking } = require('./overlayManager');
 const hoverFocus = require('./hoverFocus');
 
@@ -122,21 +122,8 @@ app.whenReady().then(() => {
     workspace.activePreset = preset || workspace.activePreset;
     if (!isContainerAlive()) return { error: 'No active game window' };
 
-    // Maximize container to fill primary display work area
-    const display = screen.getPrimaryDisplay();
-    const sf = display.scaleFactor;
-    const wa = display.workArea;
-    const hwnd = getContainerHwnd();
-    if (hwnd) {
-      placeWindow(hwnd, {
-        x:      Math.round(wa.x      * sf),
-        y:      Math.round(wa.y      * sf),
-        width:  Math.round(wa.width  * sf),
-        height: Math.round(wa.height * sf),
-      });
-    }
-
-    // Tell game window to apply new preset ratio/direction
+    // Use Electron's maximize — correct DPI scaling, window-relative
+    maximizeContainer();
     sendGameUpdate(true);
 
     const active = workspace.sessions.filter(s => s.state !== 'idle');

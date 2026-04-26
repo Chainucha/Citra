@@ -49,4 +49,8 @@ function isContainerAlive() {
   return containerWin != null && !containerWin.isDestroyed();
 }
 
-module.exports = { ensureContainer, sendToContainer, getContainerHwnd, destroyContainer, isContainerAlive };
+function maximizeContainer() {
+  if (containerWin && !containerWin.isDestroyed()) containerWin.maximize();
+}
+
+module.exports = { ensureContainer, sendToContainer, getContainerHwnd, destroyContainer, isContainerAlive, maximizeContainer };
