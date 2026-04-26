@@ -10,17 +10,18 @@ const DEFAULT_HOTKEYS = [
   'CommandOrControl+Alt+4',
 ];
 
-function bindHotkeys(sessions, onSwitch) {
+function bindHotkeys(sessions, onSwitch, shouldFire) {
   unbindAll();
+  const fire = shouldFire || (() => true);
+
   sessions.forEach((session, i) => {
     const accel = session.hotkey || DEFAULT_HOTKEYS[i];
     if (!accel) return;
 
     const ok = globalShortcut.register(accel, () => {
-      if (session.hwnd) {
-        focusWindow(session.hwnd);
-        onSwitch?.(session);
-      }
+      if (!fire() || !session.hwnd) return;
+      focusWindow(session.hwnd);
+      onSwitch?.(session);
     });
 
     if (ok) registered.push(accel);
@@ -29,9 +30,9 @@ function bindHotkeys(sessions, onSwitch) {
 
   // Cycle hotkey: Ctrl+Alt+Tab
   const cycleAccel = 'Tab';
-  // lastFocusedIdx resets on each rebind — first Tab after topology change starts at index 0
   let lastFocusedIdx = 0;
   const ok = globalShortcut.register(cycleAccel, () => {
+    if (!fire()) return;
     const active = sessions.filter(s => s.hwnd);
     if (active.length === 0) return;
     lastFocusedIdx = (lastFocusedIdx + 1) % active.length;

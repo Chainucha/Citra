@@ -53,14 +53,23 @@ function buildLayout(sessions) {
 }
 
 function makeWebview(session) {
+  // Wrapper div owns flex sizing; webview fills wrapper 100%x100%.
+  // Raw webview elements don't reliably participate in CSS flex.
+  const wrap = document.createElement('div');
+  wrap.style.overflow  = 'hidden';
+  wrap.style.minWidth  = '0';
+  wrap.style.minHeight = '0';
+  if (splitDir === 'row') wrap.style.height = '100%';
+  else                    wrap.style.width  = '100%';
+
   const wv = document.createElement('webview');
   wv.setAttribute('partition', `persist:${session.id}`);
   wv.setAttribute('src', session.url || 'https://universe.flyff.com/play');
-  wv.style.minWidth  = '0';
-  wv.style.minHeight = '0';
-  if (splitDir === 'row') wv.style.height = '100%';
-  else                    wv.style.width  = '100%';
-  return wv;
+  wv.style.width  = '100%';
+  wv.style.height = '100%';
+
+  wrap.appendChild(wv);
+  return wrap;
 }
 
 function makeDivider(a, b, container, overlay) {

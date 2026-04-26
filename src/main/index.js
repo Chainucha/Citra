@@ -41,13 +41,15 @@ app.whenReady().then(() => {
   createDashboard();
 
   function rebindHotkeys() {
-    bindHotkeys(workspace.sessions, (focused) => {
-      workspace.sessions.forEach(s => {
-        if (s.state === 'active') s.state = 'arranged';
-      });
-      focused.state = 'active';
-      workspace.sessions.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
-    });
+    bindHotkeys(
+      workspace.sessions,
+      (focused) => {
+        workspace.sessions.forEach(s => { if (s.state === 'active') s.state = 'arranged'; });
+        focused.state = 'active';
+        workspace.sessions.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
+      },
+      () => BrowserWindow.getFocusedWindow() !== null,
+    );
   }
 
   function sendGameUpdate(applyRatio = false) {
