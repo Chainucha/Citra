@@ -29,7 +29,7 @@ function renderSidebar(sessions) {
     <li>
       <span class="dot" style="background:${esc(s.accentColor)}"></span>
       <span class="session-name" title="${esc(s.name)}">${esc(s.name)}</span>
-      <span class="session-state ${s.state}">${s.state}</span>
+      <span class="session-state ${esc(s.state)}">${esc(s.state)}</span>
       ${s.hwnd ? `<button class="btn-focus" data-id="${s.id}">&#9654;</button>` : ''}
     </li>
   `).join('');
@@ -42,7 +42,7 @@ function renderCards(sessions) {
   row.innerHTML = sessions.map(s => `
     <div class="session-card" style="border-top: 3px solid ${esc(s.accentColor)}">
       <div class="card-name">${esc(s.name)}</div>
-      <div class="card-state ${s.state}">${s.state}</div>
+      <div class="card-state ${esc(s.state)}">${esc(s.state)}</div>
       <div class="card-hwnd">${s.hwnd ? `HWND 0x${Number(s.hwnd).toString(16).toUpperCase()}` : '—'}</div>
       ${s.state === 'idle'
         ? `<button class="card-btn" data-action="launch" data-id="${s.id}">Launch</button>`

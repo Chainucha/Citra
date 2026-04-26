@@ -67,4 +67,4 @@ src/
 
 ## Tech Stack
 
-Electron 30 · Node 20 · koffi 2.10 (Win32 FFI) · electron-store 10 · uiohook-napi 1.5 (optional) · vanilla HTML/JS — no TypeScript, no bundler.
+Electron 30 · Node 20 · koffi 2.10 (Win32 FFI) · electron-store 8 (v10 is ESM-only, incompatible with CJS main) · uiohook-napi 1.5 (optional) · vanilla HTML/JS — no TypeScript, no bundler.

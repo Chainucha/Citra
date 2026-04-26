@@ -9,4 +9,5 @@ module.exports = {
   OVERLAY_FOCUS:        'overlay:focus',
   OVERLAY_INTERACTIVE:  'overlay:setInteractive',
   SESSION_STATE_CHANGED:'session:stateChanged',
+  SET_HOVER_FOCUS:      'settings:setHoverFocus',
 };

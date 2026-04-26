@@ -41,6 +41,18 @@ function createDashboard() {
 app.whenReady().then(() => {
   createDashboard();
 
+  function rebindHotkeys() {
+    bindHotkeys(workspace.sessions, (focused) => {
+      workspace.sessions.forEach(s => {
+        if (s.state === 'active') s.state = 'arranged';
+      });
+      focused.state = 'active';
+      workspace.sessions.forEach(s =>
+        safeSend(CH.SESSION_STATE_CHANGED, { ...s })
+      );
+    });
+  }
+
   ipcMain.handle(CH.GET_WORKSPACE, () => workspace);
 
   ipcMain.handle(CH.ADD_SESSION, (_e, { name }) => {
@@ -127,18 +139,6 @@ app.whenReady().then(() => {
     if (session?.hwnd) focusWindow(session.hwnd);
   });
 
-  function rebindHotkeys() {
-    bindHotkeys(workspace.sessions, (focused) => {
-      workspace.sessions.forEach(s => {
-        if (s.state === 'active') s.state = 'arranged';
-      });
-      focused.state = 'active';
-      workspace.sessions.forEach(s =>
-        safeSend(CH.SESSION_STATE_CHANGED, { ...s })
-      );
-    });
-  }
-
   // Only activate if user has explicitly enabled it in settings
   if (workspace.hoverFocusEnabled) {
     hoverFocus.start(() => workspace.sessions, {
@@ -147,7 +147,7 @@ app.whenReady().then(() => {
   }
 
   // IPC to toggle from settings UI
-  ipcMain.handle('settings:setHoverFocus', (_e, { enabled, delayMs }) => {
+  ipcMain.handle(CH.SET_HOVER_FOCUS, (_e, { enabled, delayMs }) => {
     workspace.hoverFocusEnabled = enabled;
     workspace.hoverFocusDelayMs = delayMs || 400;
     saveWorkspace(workspace);
@@ -160,6 +160,8 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => { stopTracking(); hoverFocus.stop(); unbindAll(); });
-app.on('window-all-closed', () => app.quit());
+// Overlay BrowserWindows keep the app alive between dashboard closes.
+// Explicit quit is triggered by before-quit or OS session end.
+app.on('window-all-closed', () => {});
 
 module.exports = { workspace };
