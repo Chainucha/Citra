@@ -1,43 +1,52 @@
 const { BrowserWindow } = require('electron');
+const path = require('path');
 
-const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+let containerWin = null;
 
-const gameWindows = new Map(); // sessionId -> BrowserWindow
+function ensureContainer(onClosedOnce) {
+  if (containerWin && !containerWin.isDestroyed()) return containerWin;
 
-function launchSession(session, onClosed) {
-  if (gameWindows.has(session.id)) throw new Error('Session already running');
-
-  const win = new BrowserWindow({
+  containerWin = new BrowserWindow({
     width: 1280,
     height: 720,
-    title: session.name,
+    autoHideMenuBar: true,
     webPreferences: {
-      partition: `persist:${session.id}`,
       nodeIntegration: false,
       contextIsolation: true,
-      devTools: false,
+      webviewTag: true,
+      sandbox: false,
+      preload: path.join(__dirname, '../preload/game.js'),
     },
   });
 
-  win.webContents.setUserAgent(CHROME_UA);
-  win.loadURL(session.url || 'https://universe.flyff.com/play');
-
-  const hwndBuf = win.getNativeWindowHandle();
-  const hwnd = Number(hwndBuf.readBigUInt64LE(0));
-
-  gameWindows.set(session.id, win);
-  win.on('closed', () => {
-    gameWindows.delete(session.id);
-    if (onClosed) onClosed(session.id);
+  containerWin.maximize();
+  containerWin.loadFile(path.join(__dirname, '../renderer/game/index.html'));
+  containerWin.on('closed', () => {
+    containerWin = null;
+    if (onClosedOnce) onClosedOnce();
   });
 
-  return { hwnd, pid: win.webContents.getOSProcessId() };
+  return containerWin;
 }
 
-function closeSession(session) {
-  const win = gameWindows.get(session.id);
-  if (win && !win.isDestroyed()) win.destroy();
-  gameWindows.delete(session.id);
+function sendToContainer(channel, payload) {
+  if (containerWin && !containerWin.isDestroyed()) {
+    containerWin.webContents.send(channel, payload);
+  }
 }
 
-module.exports = { launchSession, closeSession };
+function getContainerHwnd() {
+  if (!containerWin || containerWin.isDestroyed()) return null;
+  return Number(containerWin.getNativeWindowHandle().readBigUInt64LE(0));
+}
+
+function destroyContainer() {
+  if (containerWin && !containerWin.isDestroyed()) containerWin.destroy();
+  containerWin = null;
+}
+
+function isContainerAlive() {
+  return containerWin != null && !containerWin.isDestroyed();
+}
+
+module.exports = { ensureContainer, sendToContainer, getContainerHwnd, destroyContainer, isContainerAlive };

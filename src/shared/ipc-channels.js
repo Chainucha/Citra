@@ -10,4 +10,6 @@ module.exports = {
   OVERLAY_INTERACTIVE:  'overlay:setInteractive',
   SESSION_STATE_CHANGED:'session:stateChanged',
   SET_HOVER_FOCUS:      'settings:setHoverFocus',
+  GAME_UPDATE:          'game:update',
+  GAME_READY:           'game:ready',
 };

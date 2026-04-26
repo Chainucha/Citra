@@ -1,20 +1,18 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const CH = require('../shared/ipc-channels');
 const { loadWorkspace, saveWorkspace, addSession } = require('./workspaceController');
-const { launchSession, closeSession } = require('./browserInstanceManager');
-const { applyLayout } = require('./windowLayoutEngine');
+const { ensureContainer, sendToContainer, getContainerHwnd, destroyContainer, isContainerAlive } = require('./browserInstanceManager');
 const { bindHotkeys, unbindAll } = require('./focusController');
-const { focusWindow } = require('./win32/windowOps');
-const { createBadge, destroyBadge, startTracking, stopTracking, overlays } = require('./overlayManager');
+const { focusWindow, placeWindow } = require('./win32/windowOps');
+const { stopTracking } = require('./overlayManager');
 const hoverFocus = require('./hoverFocus');
 
-// Single instance — two Sunkists would fight over hotkeys
+// Single instance — two Citras would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 app.commandLine.appendSwitch('high-dpi-support', '1');
 
-// Runtime state (HWNDs are not persisted — they change each launch)
 const workspace = loadWorkspace();
 
 let dashboard;
@@ -48,9 +46,16 @@ app.whenReady().then(() => {
         if (s.state === 'active') s.state = 'arranged';
       });
       focused.state = 'active';
-      workspace.sessions.forEach(s =>
-        safeSend(CH.SESSION_STATE_CHANGED, { ...s })
-      );
+      workspace.sessions.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
+    });
+  }
+
+  function sendGameUpdate(applyRatio = false) {
+    const active = workspace.sessions.filter(s => s.state !== 'idle');
+    sendToContainer(CH.GAME_UPDATE, {
+      sessions:   active.map(({ id, name, url, accentColor }) => ({ id, name, url, accentColor })),
+      preset:     workspace.activePreset || 'split-h-50',
+      applyRatio,
     });
   }
 
@@ -70,27 +75,29 @@ app.whenReady().then(() => {
     if (!session) return { error: 'Session not found' };
     if (session.state !== 'idle') return { error: 'Session already active' };
 
-    try {
-      const { pid, hwnd } = launchSession(session, (closedId) => {
-        const s = workspace.sessions.find(s => s.id === closedId);
-        if (!s) return;
-        s.hwnd = null; s.pid = null; s.state = 'idle';
-        destroyBadge(closedId);
-        safeSend(CH.SESSION_STATE_CHANGED, { ...s });
-        rebindHotkeys();
+    const container = ensureContainer(() => {
+      // Game window closed by user — reset all active sessions
+      workspace.sessions.forEach(s => {
+        if (s.state !== 'idle') {
+          s.hwnd = null; s.pid = null; s.state = 'idle';
+          safeSend(CH.SESSION_STATE_CHANGED, { ...s });
+        }
       });
-      session.pid   = pid;
-      session.hwnd  = hwnd;
-      session.state = 'tracking';
-      saveWorkspace(workspace);
-    } catch (err) {
-      session.state = 'idle';
-      return { error: err.message };
+      rebindHotkeys();
+    });
+
+    session.hwnd  = getContainerHwnd();
+    session.pid   = container.webContents.getOSProcessId();
+    session.state = 'tracking';
+    saveWorkspace(workspace);
+    safeSend(CH.SESSION_STATE_CHANGED, { ...session });
+
+    if (container.webContents.isLoading()) {
+      container.webContents.once('did-finish-load', () => sendGameUpdate());
+    } else {
+      sendGameUpdate();
     }
 
-    safeSend(CH.SESSION_STATE_CHANGED, { ...session });
-    if (workspace.overlayVisible) createBadge(session);
-    startTracking(() => workspace.sessions, 250);
     rebindHotkeys();
     return { ok: true };
   });
@@ -98,51 +105,56 @@ app.whenReady().then(() => {
   ipcMain.handle(CH.CLOSE_SESSION, (_e, { id }) => {
     const session = workspace.sessions.find(s => s.id === id);
     if (!session || session.state === 'idle') return { ok: true };
-    closeSession(session);
-    session.hwnd  = null;
-    session.pid   = null;
-    session.state = 'idle';
-    destroyBadge(id);
+
+    session.hwnd = null; session.pid = null; session.state = 'idle';
     safeSend(CH.SESSION_STATE_CHANGED, { ...session });
+    sendGameUpdate();
+
+    if (!workspace.sessions.some(s => s.state !== 'idle')) destroyContainer();
+
     rebindHotkeys();
     return { ok: true };
   });
 
   ipcMain.handle(CH.APPLY_LAYOUT, (_e, { preset }) => {
     workspace.activePreset = preset || workspace.activePreset;
-    const active = workspace.sessions.filter(s => s.hwnd);
-    if (active.length === 0) return { error: 'No tracked windows to arrange' };
-    try {
-      applyLayout(workspace.activePreset, active);
-      active.forEach(s => { s.state = 'arranged'; });
-      active.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
-      return { ok: true };
-    } catch (err) {
-      return { error: err.message };
+    if (!isContainerAlive()) return { error: 'No active game window' };
+
+    // Maximize container to fill primary display work area
+    const display = screen.getPrimaryDisplay();
+    const sf = display.scaleFactor;
+    const wa = display.workArea;
+    const hwnd = getContainerHwnd();
+    if (hwnd) {
+      placeWindow(hwnd, {
+        x:      Math.round(wa.x      * sf),
+        y:      Math.round(wa.y      * sf),
+        width:  Math.round(wa.width  * sf),
+        height: Math.round(wa.height * sf),
+      });
     }
+
+    // Tell game window to apply new preset ratio/direction
+    sendGameUpdate(true);
+
+    const active = workspace.sessions.filter(s => s.state !== 'idle');
+    active.forEach(s => { s.state = 'arranged'; });
+    active.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
+    return { ok: true };
   });
 
   ipcMain.handle(CH.FOCUS_SESSION, (_e, { id }) => {
     const session = workspace.sessions.find(s => s.id === id);
     if (!session?.hwnd) return { error: 'Session has no tracked window' };
     focusWindow(session.hwnd);
-    workspace.sessions.forEach(s => {
-      if (s.state === 'active') s.state = 'arranged';
-    });
+    workspace.sessions.forEach(s => { if (s.state === 'active') s.state = 'arranged'; });
     session.state = 'active';
     workspace.sessions.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
     return { ok: true };
   });
 
-  ipcMain.on(CH.OVERLAY_INTERACTIVE, (_e, { sessionId, on }) => {
-    const win = overlays.get(sessionId);
-    if (win && !win.isDestroyed()) win.setIgnoreMouseEvents(!on, { forward: true });
-  });
-
-  ipcMain.on(CH.OVERLAY_FOCUS, (_e, { sessionId }) => {
-    const session = workspace.sessions.find(s => s.id === sessionId);
-    if (session?.hwnd) focusWindow(session.hwnd);
-  });
+  // Game container signals readiness — send current session state
+  ipcMain.on(CH.GAME_READY, sendGameUpdate);
 
   // Only activate if user has explicitly enabled it in settings
   if (workspace.hoverFocusEnabled) {
@@ -151,7 +163,6 @@ app.whenReady().then(() => {
     });
   }
 
-  // IPC to toggle from settings UI
   ipcMain.handle(CH.SET_HOVER_FOCUS, (_e, { enabled, delayMs }) => {
     workspace.hoverFocusEnabled = enabled;
     workspace.hoverFocusDelayMs = delayMs || 400;
@@ -160,13 +171,9 @@ app.whenReady().then(() => {
     else hoverFocus.stop();
     return { ok: true };
   });
-
-  // Remaining handlers added in later tasks
 });
 
 app.on('before-quit', () => { stopTracking(); hoverFocus.stop(); unbindAll(); });
-// Overlay BrowserWindows keep the app alive between dashboard closes.
-// Explicit quit is triggered by before-quit or OS session end.
-app.on('window-all-closed', () => {});
+app.on('window-all-closed', () => app.quit());
 
 module.exports = { workspace };
