@@ -1,0 +1,23 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: transparent; overflow: hidden; }
+#badge {
+  background: rgba(0,0,0,.8);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  color: #fff;
+  display: inline-block;
+  min-width: 200px;
+  user-select: none;
+}
+.header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+#label { font-weight: 700; flex: 1; }
+#btn-focus { background: transparent; border: none; color: #f59e0b;
+             cursor: pointer; font-size: 11px; padding: 2px; }
+#timer-row { display: flex; align-items: center; gap: 6px; }
+#timer-display { flex: 1; color: #aaa; font-size: 11px; font-variant-numeric: tabular-nums; }
+button { background: #1e293b; border: none; color: #ccc; padding: 2px 6px;
+         cursor: pointer; border-radius: 3px; font-size: 10px; }
+button:hover { background: #334155; }

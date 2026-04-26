@@ -1,0 +1,21 @@
+{
+  "name": "sunkist",
+  "version": "0.1.0",
+  "description": "ToS-compliant window manager for Flyff Universe dual-clienting",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0",
+    "koffi": "^2.10.0"
+  },
+  "optionalDependencies": {
+    "uiohook-napi": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}
