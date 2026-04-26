@@ -28,7 +28,7 @@ function bindHotkeys(sessions, onSwitch) {
   });
 
   // Cycle hotkey: Ctrl+Alt+Tab
-  const cycleAccel = 'CommandOrControl+Alt+Tab';
+  const cycleAccel = 'Tab';
   // lastFocusedIdx resets on each rebind — first Tab after topology change starts at index 0
   let lastFocusedIdx = 0;
   const ok = globalShortcut.register(cycleAccel, () => {
