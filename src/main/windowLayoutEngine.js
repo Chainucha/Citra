@@ -1,12 +1,7 @@
 const { screen } = require('electron');
 const { placeWindow } = require('./win32/windowOps');
 
-/**
- * Presets: pure functions of workArea → [rect, rect].
- * workArea is Electron's DPI-scaled workArea (already excludes taskbar).
- * Values passed to SetWindowPos are physical pixels on a per-monitor-aware
- * process — Electron handles the DPI conversion so we pass them directly.
- */
+// Presets receive physical-pixel workArea and return [rect, rect] in physical pixels.
 const PRESETS = {
   'split-h-50': (wa) => [
     { x: wa.x,                         y: wa.y, width: Math.floor(wa.width / 2), height: wa.height },
@@ -41,16 +36,20 @@ function applyLayout(presetId, sessions, displayId = null) {
     : screen.getPrimaryDisplay();
   if (!display) throw new Error('Display not found');
 
-  const rects = preset(display.workArea);
+  // workArea is in logical pixels; SetWindowPos needs physical pixels
+  const sf = display.scaleFactor;
+  const wa = display.workArea;
+  const physWa = {
+    x:      Math.round(wa.x      * sf),
+    y:      Math.round(wa.y      * sf),
+    width:  Math.round(wa.width  * sf),
+    height: Math.round(wa.height * sf),
+  };
+
+  const rects = preset(physWa);
 
   sessions.forEach((s, i) => {
-    if (s.hwnd && rects[i]) {
-      const r = rects[i];
-      placeWindow(s.hwnd, {
-        x: Math.round(r.x), y: Math.round(r.y),
-        width: Math.round(r.width), height: Math.round(r.height),
-      });
-    }
+    if (s.hwnd && rects[i]) placeWindow(s.hwnd, rects[i]);
   });
 }
 
