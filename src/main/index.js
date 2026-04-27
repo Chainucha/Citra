@@ -10,7 +10,20 @@ const { stopTracking } = require('./overlayManager');
 // Single instance — two Citras would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
+// ── Performance switches (must run before app.whenReady) ──
 app.commandLine.appendSwitch('high-dpi-support', '1');
+app.commandLine.appendSwitch('disk-cache-size', '52428800'); // 50MB
+// Stop Chromium throttling timers/raf/JS in unfocused game panes
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+// Force GPU compositor + canvas/raster accel — Electron is more conservative than Chrome by default
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization');
+// Hybrid-GPU laptops: prefer discrete GPU for WebGL (Flyff uses Three.js/WebGL)
+app.commandLine.appendSwitch('force_high_performance_gpu');
 
 const workspace = loadWorkspace();
 
@@ -35,7 +48,7 @@ function createDashboard() {
   dashboard.loadFile(path.join(__dirname, '../renderer/dashboard/index.html'));
   if (process.env.NODE_ENV === 'dev') dashboard.webContents.openDevTools();
 }
-app.commandLine.appendSwitch('disk-cache-size', '52428800'); // 50MB
+
 
 app.whenReady().then(() => {
   createDashboard();
