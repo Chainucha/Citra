@@ -10,15 +10,23 @@ let dividerEl  = null;
 let splitRatio = 0.5;
 let splitDir   = 'row';
 let lastIds    = '';
+let locked     = false;
+let hoverEnabled = false;
+let hoverDelayMs = 400;
+let hoverTimer   = null;
 
-window.gameBridge.onUpdate(({ sessions, preset, applyRatio }) => {
+window.gameBridge.onUpdate(({ sessions, preset, lockLayout, applyRatio, hoverFocusEnabled, hoverFocusDelayMs }) => {
   const cfg        = PRESETS[preset] || { dir: 'row', ratio: 0.5 };
   const newIds     = sessions.map(s => s.id).join(',');
   const dirChanged = cfg.dir !== splitDir;
   const idsChanged = newIds !== lastIds;
+  const lockChanged = !!lockLayout !== locked;
 
   if (applyRatio || dirChanged) { splitRatio = cfg.ratio; splitDir = cfg.dir; }
+  locked  = !!lockLayout;
   lastIds = newIds;
+  hoverEnabled = !!hoverFocusEnabled;
+  hoverDelayMs = hoverFocusDelayMs || 400;
 
   const container = document.getElementById('container');
   const overlay   = document.getElementById('drag-overlay');
@@ -33,7 +41,17 @@ window.gameBridge.onUpdate(({ sessions, preset, applyRatio }) => {
   } else if (applyRatio) {
     // Only ratio changed — update flex values, no DOM mutation
     updateRatio();
+  } else if (lockChanged && dividerEl) {
+    applyLockState();
   }
+});
+
+window.gameBridge.onFocusWebview(({ id }) => {
+  const wrap = wrappers.get(id);
+  const wv = wrap?.querySelector('webview');
+  if (!wv) return;
+  try { document.activeElement?.blur?.(); } catch {}
+  try { wv.focus(); } catch {}
 });
 
 window.gameBridge.ready();
@@ -107,27 +125,52 @@ function setDirStyles(views) {
 
 function createWrapper(session) {
   const wrap = document.createElement('div');
-  wrap.style.overflow  = 'hidden';
-  wrap.style.minWidth  = '0';
-  wrap.style.minHeight = '0';
+  wrap.className = 'webview-wrap';
 
   const wv = document.createElement('webview');
   wv.setAttribute('partition', `persist:${session.id}`);
   wv.setAttribute('src', session.url || 'https://universe.flyff.com/play');
-  wv.style.width  = '100%';
-  wv.style.height = '100%';
+  wv.setAttribute('tabindex', '0');
 
-  wrap.appendChild(wv);
+  const label = document.createElement('div');
+  label.className = 'session-label';
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  dot.style.background = session.accentColor || '#f59e0b';
+  const name = document.createElement('span');
+  name.textContent = session.name || 'Session';
+  label.append(dot, name);
+
+  wv.addEventListener('focus',  () => wrap.classList.add('focused'));
+  wv.addEventListener('blur',   () => wrap.classList.remove('focused'));
+
+  wrap.addEventListener('mouseenter', () => {
+    if (!hoverEnabled) return;
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      try { document.activeElement?.blur?.(); } catch {}
+      try { wv.focus(); } catch {}
+    }, hoverDelayMs);
+  });
+  wrap.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
+
+  wrap.append(wv, label);
   return wrap;
+}
+
+function applyLockState() {
+  if (!dividerEl) return;
+  dividerEl.classList.toggle('locked', locked);
 }
 
 function createDivider(a, b, container, overlay) {
   const isRow = splitDir === 'row';
   const div   = document.createElement('div');
-  div.className = `divider ${isRow ? 'vertical' : 'horizontal'}`;
+  div.className = `divider ${isRow ? 'vertical' : 'horizontal'}${locked ? ' locked' : ''}`;
   div.innerHTML = '<div class="divider-handle"></div>';
 
   div.addEventListener('mousedown', e => {
+    if (locked) return;
     e.preventDefault();
     overlay.style.cursor = isRow ? 'col-resize' : 'row-resize';
     overlay.classList.add('active');

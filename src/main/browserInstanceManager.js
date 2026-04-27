@@ -21,6 +21,9 @@ function ensureContainer(onClosedOnce) {
 
   containerWin.maximize();
   containerWin.loadFile(path.join(__dirname, '../renderer/game/index.html'));
+  if (process.env.NODE_ENV === 'dev') {
+    containerWin.webContents.openDevTools({ mode: 'detach' });
+  }
   containerWin.on('closed', () => {
     containerWin = null;
     if (onClosedOnce) onClosedOnce();
@@ -49,8 +52,21 @@ function isContainerAlive() {
   return containerWin != null && !containerWin.isDestroyed();
 }
 
+function getContainerWindow() {
+  return isContainerAlive() ? containerWin : null;
+}
+
 function maximizeContainer() {
   if (containerWin && !containerWin.isDestroyed()) containerWin.maximize();
 }
 
-module.exports = { ensureContainer, sendToContainer, getContainerHwnd, destroyContainer, isContainerAlive, maximizeContainer };
+function toggleFullscreenContainer() {
+  if (!containerWin || containerWin.isDestroyed()) return;
+  try {
+    containerWin.setFullScreen(!containerWin.isFullScreen());
+  } catch (e) {
+    console.warn('[fullscreen] toggle failed:', e?.message);
+  }
+}
+
+module.exports = { ensureContainer, sendToContainer, getContainerHwnd, getContainerWindow, destroyContainer, isContainerAlive, maximizeContainer, toggleFullscreenContainer };

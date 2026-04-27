@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'" />
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
   <title>Citra</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -33,10 +33,8 @@
         </div>
         <div class="action-row">
           <button id="btn-apply" class="btn-primary">Apply Layout</button>
-          <label class="toggle-label">
-            <input type="checkbox" id="chk-lock" />
-            Lock Layout
-          </label>
+          <button id="btn-lock" class="btn-toggle" aria-pressed="false">🔓 Unlocked</button>
+          <button id="btn-hover" class="btn-toggle" aria-pressed="false">Hover Focus: Off</button>
         </div>
       </section>
 
@@ -55,7 +53,8 @@
         <table id="hotkey-table" class="hotkey-table">
           <tr><td>Ctrl+Alt+1</td><td>Focus Session 1</td></tr>
           <tr><td>Ctrl+Alt+2</td><td>Focus Session 2</td></tr>
-          <tr><td>Ctrl+Alt+Tab</td><td>Cycle Focus</td></tr>
+          <tr><td>Tab</td><td>Cycle Focus (only inside game window)</td></tr>
+          <tr><td>F11</td><td>Toggle Fullscreen (only inside game window)</td></tr>
         </table>
         <p class="note">Hotkeys change which window is in front. They are never sent to the game.</p>
       </section>

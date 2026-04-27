@@ -4,18 +4,24 @@ const { focusWindow } = require('./win32/windowOps');
 let registered = [];
 
 const DEFAULT_HOTKEYS = [
-  'CommandOrControl+Alt+1',
-  'CommandOrControl+Alt+2',
+  'Shift+1',
+  'Shift+2',
   'CommandOrControl+Alt+3',
   'CommandOrControl+Alt+4',
 ];
 
-function bindHotkeys(sessions, onSwitch, shouldFire) {
+let cycleSessions = [];
+let cycleOnSwitch = null;
+let cycleIdx = 0;
+let onFullscreen = null;
+let containerOn  = false;
+
+function bindHotkeys(sessions, onSwitch, shouldFire, onFullscreenCb) {
   unbindAll();
   const fire = shouldFire || (() => true);
 
   sessions.forEach((session, i) => {
-    const accel = session.hotkey || DEFAULT_HOTKEYS[i];
+    const accel = session.hotkey; //|| DEFAULT_HOTKEYS[i];
     if (!accel) return;
 
     const ok = globalShortcut.register(accel, () => {
@@ -28,25 +34,41 @@ function bindHotkeys(sessions, onSwitch, shouldFire) {
     else console.warn(`[hotkey] Could not register "${accel}" — already claimed by another app.`);
   });
 
-  // Cycle hotkey: Ctrl+Alt+Tab
-  const cycleAccel = 'Tab';
-  let lastFocusedIdx = 0;
-  const ok = globalShortcut.register(cycleAccel, () => {
-    if (!fire()) return;
-    const active = sessions.filter(s => s.hwnd);
-    if (active.length === 0) return;
-    lastFocusedIdx = (lastFocusedIdx + 1) % active.length;
-    const target = active[lastFocusedIdx];
-    focusWindow(target.hwnd);
-    onSwitch?.(target);
-  });
-  if (ok) registered.push(cycleAccel);
-  else console.warn(`[hotkey] Could not register cycle hotkey "${cycleAccel}" — may be claimed by OS.`);
+  cycleSessions = sessions;
+  cycleOnSwitch = onSwitch;
+  if (onFullscreenCb !== undefined) onFullscreen = onFullscreenCb;
+  cycleIdx = 0;
+}
+
+function enableContainerHotkeys() {
+  if (containerOn) return;
+  const okTab = globalShortcut.register('Tab', () => cycleFocus());
+  const okF11 = globalShortcut.register('F11', () => onFullscreen?.());
+  if (!okTab) console.warn('[hotkey] Could not register Tab');
+  if (!okF11) console.warn('[hotkey] Could not register F11');
+  containerOn = true;
+}
+
+function disableContainerHotkeys() {
+  if (!containerOn) return;
+  globalShortcut.unregister('Tab');
+  globalShortcut.unregister('F11');
+  containerOn = false;
+}
+
+function cycleFocus() {
+  const active = cycleSessions.filter(s => s.hwnd);
+  if (active.length === 0) return;
+  cycleIdx = (cycleIdx + 1) % active.length;
+  const target = active[cycleIdx];
+  focusWindow(target.hwnd);
+  cycleOnSwitch?.(target);
 }
 
 function unbindAll() {
   registered.forEach(a => globalShortcut.unregister(a));
   registered = [];
+  disableContainerHotkeys();
 }
 
-module.exports = { bindHotkeys, unbindAll };
+module.exports = { bindHotkeys, unbindAll, cycleFocus, enableContainerHotkeys, disableContainerHotkeys };

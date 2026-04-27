@@ -6,10 +6,12 @@ module.exports = {
   APPLY_LAYOUT:         'layout:apply',
   FOCUS_SESSION:        'session:focus',
   ADD_SESSION:          'session:add',
+  DELETE_SESSION:       'session:delete',
   OVERLAY_FOCUS:        'overlay:focus',
   OVERLAY_INTERACTIVE:  'overlay:setInteractive',
   SESSION_STATE_CHANGED:'session:stateChanged',
   SET_HOVER_FOCUS:      'settings:setHoverFocus',
   GAME_UPDATE:          'game:update',
   GAME_READY:           'game:ready',
+  GAME_FOCUS_WEBVIEW:   'game:focusWebview',
 };

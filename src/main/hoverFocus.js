@@ -5,7 +5,7 @@ let running  = false;
  * Start hover-to-focus. Read-only hook — no input synthesis, no fire/post/inject calls.
  * Gated behind settings toggle; default OFF.
  */
-function start(getSessions, { delayMs = 400 } = {}) {
+function start(getSessions, { delayMs = 50 } = {}) {
   if (running) return;
   try {
     uIOhook = require('uiohook-napi').uIOhook;

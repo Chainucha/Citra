@@ -12,7 +12,7 @@ const PRESETS = {
     { x: wa.x, y: wa.y + Math.floor(wa.height / 2), width: wa.width, height: wa.height - Math.floor(wa.height / 2) },
   ],
   'split-h-70': (wa) => {
-    const w1 = Math.floor(wa.width * 0.3);
+    const w1 = Math.floor(wa.width * 0.7);
     return [
       { x: wa.x,      y: wa.y, width: w1,            height: wa.height },
       { x: wa.x + w1, y: wa.y, width: wa.width - w1, height: wa.height },

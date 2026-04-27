@@ -46,4 +46,11 @@ function addSession(workspace, name) {
   return session;
 }
 
-module.exports = { loadWorkspace, saveWorkspace, addSession };
+function deleteSession(workspace, id) {
+  const idx = workspace.sessions.findIndex(s => s.id === id);
+  if (idx < 0) return false;
+  workspace.sessions.splice(idx, 1);
+  return true;
+}
+
+module.exports = { loadWorkspace, saveWorkspace, addSession, deleteSession };

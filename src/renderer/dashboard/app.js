@@ -45,7 +45,8 @@ function renderCards(sessions) {
       <div class="card-state ${esc(s.state)}">${esc(s.state)}</div>
       <div class="card-hwnd">${s.hwnd ? `HWND 0x${Number(s.hwnd).toString(16).toUpperCase()}` : '—'}</div>
       ${s.state === 'idle'
-        ? `<button class="card-btn" data-action="launch" data-id="${s.id}">Launch</button>`
+        ? `<button class="card-btn" data-action="launch" data-id="${s.id}">Launch</button>
+           <button class="card-btn danger" data-action="delete" data-id="${s.id}" data-name="${esc(s.name)}">Delete</button>`
         : `<button class="card-btn danger" data-action="close" data-id="${s.id}">Close</button>`
       }
     </div>
@@ -53,14 +54,21 @@ function renderCards(sessions) {
 
   row.querySelectorAll('.card-btn').forEach(b => {
     b.addEventListener('click', async () => {
-      const { action, id } = b.dataset;
+      const { action, id, name } = b.dataset;
       if (action === 'launch') {
         setStatus('Launching…');
         const r = await window.sunkist.launchSession(id);
         setStatus(r.error ? r.error : 'Launched', !!r.error);
-      } else {
+      } else if (action === 'close') {
         await window.sunkist.closeSession(id);
         setStatus('Closed');
+      } else if (action === 'delete') {
+        if (!confirm(`Delete session "${name}"? Cookies and storage for this account will be removed on next launch.`)) return;
+        const r = await window.sunkist.deleteSession(id);
+        if (r.error) { setStatus(r.error, true); return; }
+        currentSessions = currentSessions.filter(s => s.id !== id);
+        renderAll();
+        setStatus('Deleted');
       }
     });
   });
@@ -121,8 +129,31 @@ dlgAdd.addEventListener('close', async () => {
   renderAll();
 });
 
-document.getElementById('chk-lock').addEventListener('change', async (e) => {
-  await window.sunkist.saveWorkspace({ lockLayout: e.target.checked });
+const btnLock = document.getElementById('btn-lock');
+function renderLock(isLocked) {
+  btnLock.setAttribute('aria-pressed', String(isLocked));
+  btnLock.classList.toggle('locked', isLocked);
+  btnLock.textContent = isLocked ? '🔒 Locked' : '🔓 Unlocked';
+}
+btnLock.addEventListener('click', async () => {
+  const next = btnLock.getAttribute('aria-pressed') !== 'true';
+  renderLock(next);
+  await window.sunkist.saveWorkspace({ lockLayout: next });
+  setStatus(next ? 'Layout locked' : 'Layout unlocked');
+});
+
+const btnHover = document.getElementById('btn-hover');
+let hoverDelayMs = 400;
+function renderHover(enabled) {
+  btnHover.setAttribute('aria-pressed', String(enabled));
+  btnHover.classList.toggle('on', enabled);
+  btnHover.textContent = `Hover Focus: ${enabled ? 'On' : 'Off'}`;
+}
+btnHover.addEventListener('click', async () => {
+  const next = btnHover.getAttribute('aria-pressed') !== 'true';
+  renderHover(next);
+  await window.sunkist.setHoverFocus(next, hoverDelayMs);
+  setStatus(next ? 'Hover focus on' : 'Hover focus off');
 });
 
 async function init() {
@@ -131,7 +162,9 @@ async function init() {
   selectedPreset  = workspace.activePreset || 'split-h-50';
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
   document.querySelector(`.preset-btn[data-preset="${selectedPreset}"]`)?.classList.add('active');
-  document.getElementById('chk-lock').checked = !!workspace.lockLayout;
+  renderLock(!!workspace.lockLayout);
+  hoverDelayMs = workspace.hoverFocusDelayMs || 400;
+  renderHover(!!workspace.hoverFocusEnabled);
   renderAll();
 }
 
