@@ -14,6 +14,8 @@ const RECT = koffi.struct('RECT', {
   left: LONG, top: LONG, right: LONG, bottom: LONG,
 });
 
+const POINT = koffi.struct('POINT', { x: LONG, y: LONG });
+
 const EnumWindowsProc = koffi.proto('EnumWindowsProc', BOOL, [HWND, 'intptr']);
 
 // --- Constants ---
@@ -46,16 +48,17 @@ const SetForegroundWindow = user32.func('__stdcall', 'SetForegroundWindow', BOOL
 const BringWindowToTop    = user32.func('__stdcall', 'BringWindowToTop',    BOOL, [HWND]);
 const AttachThreadInput   = user32.func('__stdcall', 'AttachThreadInput',   BOOL, [DWORD, DWORD, BOOL]);
 const GetCurrentThreadId  = kernel32.func('__stdcall', 'GetCurrentThreadId', DWORD, []);
+const GetCursorPos        = user32.func('__stdcall', 'GetCursorPos',        BOOL, [koffi.out(koffi.pointer(POINT))]);
 
 // Deliberately NOT bound: SendInput, keybd_event, mouse_event, PostMessage,
 // ReadProcessMemory, SetWindowsHookEx(keyboard), BitBlt, CreateRemoteThread.
 // Adding any of these is a compliance boundary crossing — flag in PR review.
 
 module.exports = {
-  HWND, RECT, EnumWindowsProc,
+  HWND, RECT, POINT, EnumWindowsProc,
   SWP_NOZORDER, SWP_NOACTIVATE, SWP_ASYNCWINDOWPOS, HWND_TOP,
   EnumWindows, GetWindowThreadProcessId, GetClassName, GetWindowRect,
   SetWindowPos, IsWindowVisible,
   GetForegroundWindow, SetForegroundWindow, BringWindowToTop,
-  AttachThreadInput, GetCurrentThreadId,
+  AttachThreadInput, GetCurrentThreadId, GetCursorPos,
 };

@@ -12,11 +12,12 @@ const {
   getGroupIdByWebContents, isAnyContainerAlive,
 } = require('./browserInstanceManager');
 const {
-  bindHotkeys, unbindGroup, unbindAll,
+  bindHotkeys, unbindGroup, unbindAll, recordFocus,
   enableContainerHotkeys, disableContainerHotkeys,
 } = require('./focusController');
 const { focusWindow } = require('./win32/windowOps');
 const { stopTracking } = require('./overlayManager');
+const hoverFocus = require('./hoverFocus');
 
 // Single instance — two Citras would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
@@ -49,6 +50,14 @@ function sessionsOfGroup(groupId) {
 
 function findGroup(groupId) {
   return workspace.groups.find(g => g.id === groupId);
+}
+
+function applyHoverFocus() {
+  if (workspace.hoverFocusEnabled) {
+    hoverFocus.start(() => workspace.sessions);
+  } else {
+    hoverFocus.stop();
+  }
 }
 
 function sendGameUpdate(groupId, applyRatio = false) {
@@ -162,6 +171,7 @@ function createDashboard() {
 
 app.whenReady().then(() => {
   createDashboard();
+  applyHoverFocus();
 
   ipcMain.handle(CH.GET_WORKSPACE, () => workspace);
 
@@ -233,6 +243,7 @@ app.whenReady().then(() => {
     const session = workspace.sessions.find(s => s.id === id);
     if (!session?.hwnd) return { error: 'Session has no tracked window' };
     focusWindow(session.hwnd);
+    recordFocus(session.groupId, id);
     sendToContainer(session.groupId, CH.GAME_FOCUS_WEBVIEW, { id });
     sessionsOfGroup(session.groupId).forEach(s => { if (s.state === 'active') s.state = 'arranged'; });
     session.state = 'active';
@@ -317,12 +328,13 @@ app.whenReady().then(() => {
     workspace.hoverFocusEnabled = !!enabled;
     workspace.hoverFocusDelayMs = delayMs || 400;
     saveWorkspace(workspace);
+    applyHoverFocus();
     workspace.groups.forEach(g => { if (isContainerAlive(g.id)) sendGameUpdate(g.id); });
     return { ok: true };
   });
 });
 
-app.on('before-quit', () => { stopTracking(); unbindAll(); });
+app.on('before-quit', () => { stopTracking(); unbindAll(); hoverFocus.stop(); });
 app.on('window-all-closed', () => app.quit());
 
 module.exports = { workspace };

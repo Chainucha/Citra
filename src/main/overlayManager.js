@@ -9,7 +9,7 @@ function createBadge(session) {
   if (overlays.has(session.id)) return overlays.get(session.id);
 
   const win = new BrowserWindow({
-    width: 220, height: 100,
+    width: 180, height: 60,
     x: 100, y: 100,
     frame: false,
     transparent: true,
@@ -52,7 +52,7 @@ function positionBadge(session) {
   if (!session.hwnd) return;
   try {
     const r = getRect(session.hwnd);
-    win.setBounds({ x: r.x + 8, y: r.y + 8, width: 220, height: 100 });
+    win.setBounds({ x: r.x + 5, y: r.y + 5, width: 220, height: 60 });
   } catch { /* window may have closed */ }
 }
 

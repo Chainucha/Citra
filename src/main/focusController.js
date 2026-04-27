@@ -4,16 +4,24 @@ const { getGroupIdByWebContents } = require('./browserInstanceManager');
 
 let registered = [];
 
-// Per-group cycle state: groupId → { sessions, idx, onSwitch }
+// Per-group state: groupId → { sessions, onSwitch, mru: [sessionId,...] }
+// MRU is most-recent-first. Drives Alt+Tab-style toggle: Tab focuses MRU[1].
 const cycleByGroup = new Map();
 let onFullscreen = null;
 let containerOn  = false;
+
+function recordFocus(groupId, sessionId) {
+  const state = cycleByGroup.get(groupId);
+  if (!state) return;
+  state.mru = [sessionId, ...state.mru.filter(id => id !== sessionId)];
+}
 
 // Bind per-session global hotkeys for one group's sessions.
 // Per-session hotkeys are workspace-global (cannot collide between groups —
 // dashboard is responsible for unique accelerators).
 function bindHotkeys(groupId, sessions, onSwitch, shouldFire, onFullscreenCb) {
-  // Unbind any previous registrations for this group
+  // Preserve MRU across rebinds (sessions reordered, renamed, etc.)
+  const prevMru = cycleByGroup.get(groupId)?.mru || [];
   unbindGroup(groupId);
   const fire = shouldFire || (() => true);
 
@@ -23,13 +31,18 @@ function bindHotkeys(groupId, sessions, onSwitch, shouldFire, onFullscreenCb) {
     const ok = globalShortcut.register(accel, () => {
       if (!fire() || !session.hwnd) return;
       focusWindow(session.hwnd);
+      recordFocus(groupId, session.id);
       onSwitch?.(session);
     });
     if (ok) registered.push({ groupId, accel });
     else console.warn(`[hotkey] Could not register "${accel}" — already claimed.`);
   });
 
-  cycleByGroup.set(groupId, { sessions, onSwitch, idx: 0 });
+  const validIds = new Set(sessions.map(s => s.id));
+  cycleByGroup.set(groupId, {
+    sessions, onSwitch,
+    mru: prevMru.filter(id => validIds.has(id)),
+  });
   if (onFullscreenCb !== undefined) onFullscreen = onFullscreenCb;
 }
 
@@ -67,6 +80,9 @@ function focusedContainerGroupId() {
   return getGroupIdByWebContents(win.webContents);
 }
 
+// Alt+Tab style: Tab jumps to previously-focused session in this group.
+// Repeated Tab toggles between the two most-recent sessions. With 3+ active,
+// the second Tab still goes back to the prior, matching Windows quick-switch.
 function cycleFocus() {
   const groupId = focusedContainerGroupId();
   if (!groupId) return;
@@ -74,9 +90,21 @@ function cycleFocus() {
   if (!state) return;
   const active = state.sessions.filter(s => s.hwnd);
   if (active.length === 0) return;
-  state.idx = (state.idx + 1) % active.length;
-  const target = active[state.idx];
+
+  const validIds = new Set(active.map(s => s.id));
+  const mru = state.mru.filter(id => validIds.has(id));
+
+  let target = null;
+  if (mru.length >= 2) {
+    target = active.find(s => s.id === mru[1]);
+  } else {
+    // No prior — fall back to first non-current.
+    target = active.find(s => s.id !== mru[0]) || active[0];
+  }
+  if (!target) return;
+
   focusWindow(target.hwnd);
+  recordFocus(groupId, target.id);
   state.onSwitch?.(target);
 }
 
@@ -88,6 +116,6 @@ function unbindAll() {
 }
 
 module.exports = {
-  bindHotkeys, unbindGroup, unbindAll, cycleFocus,
+  bindHotkeys, unbindGroup, unbindAll, cycleFocus, recordFocus,
   enableContainerHotkeys, disableContainerHotkeys,
 };
