@@ -13,18 +13,24 @@ let splitRatio = 0.5;
 let splitDir   = 'row';
 let lastIds    = '';
 let locked     = false;
+let initialized = false;
 let hoverEnabled = false;
 let hoverDelayMs = 400;
 let hoverTimer   = null;
 
-window.gameBridge.onUpdate(({ sessions, preset, lockLayout, applyRatio, hoverFocusEnabled, hoverFocusDelayMs }) => {
+window.gameBridge.onUpdate(({ sessions, preset, lockLayout, applyRatio, savedRatio, hoverFocusEnabled, hoverFocusDelayMs }) => {
   const cfg        = PRESETS[preset] || { dir: 'row', ratio: 0.5 };
   const newIds     = sessions.map(s => s.id).join(',');
   const dirChanged = cfg.dir !== splitDir;
   const idsChanged = newIds !== lastIds;
   const lockChanged = !!lockLayout !== locked;
 
-  if (applyRatio || dirChanged) { splitRatio = cfg.ratio; splitDir = cfg.dir; }
+  if (applyRatio || dirChanged || !initialized) {
+    splitRatio = savedRatio ?? cfg.ratio;
+    splitDir   = cfg.dir;
+    initialized = true;
+  }
+  hideSaveRatioBtn();
   locked  = !!lockLayout;
   lastIds = newIds;
   hoverEnabled = !!hoverFocusEnabled;
@@ -208,6 +214,32 @@ function applyLockState() {
   dividerEl.classList.toggle('locked', locked);
 }
 
+// ── Save-ratio button ─────────────────────────────────────────────────────────
+
+let saveRatioBtn = null;
+
+function getSaveRatioBtn() {
+  if (!saveRatioBtn) {
+    saveRatioBtn = document.createElement('button');
+    saveRatioBtn.id = 'btn-save-ratio';
+    saveRatioBtn.textContent = 'Save Layout';
+    saveRatioBtn.addEventListener('click', async () => {
+      await window.gameBridge.saveLayoutRatio(splitRatio);
+      hideSaveRatioBtn();
+    });
+    document.body.appendChild(saveRatioBtn);
+  }
+  return saveRatioBtn;
+}
+
+function showSaveRatioBtn() {
+  getSaveRatioBtn().classList.add('visible');
+}
+
+function hideSaveRatioBtn() {
+  saveRatioBtn?.classList.remove('visible');
+}
+
 function createDivider(a, b, container, overlay) {
   const isRow = splitDir === 'row';
   const div   = document.createElement('div');
@@ -223,6 +255,7 @@ function createDivider(a, b, container, overlay) {
 
     const startPos  = isRow ? e.clientX : e.clientY;
     const startFlex = parseFloat(a.style.flex);
+    let   reportAt  = 0;
 
     const onMove = e => {
       const size    = isRow ? container.clientWidth  : container.clientHeight;
@@ -232,6 +265,9 @@ function createDivider(a, b, container, overlay) {
       a.style.flex  = String(next);
       b.style.flex  = String(1 - next);
       splitRatio    = next;
+      // Throttle to ~30Hz — enough for live dashboard display without flooding IPC
+      const now = Date.now();
+      if (now - reportAt > 32) { window.gameBridge.reportRatio(next); reportAt = now; }
     };
 
     const onUp = () => {
@@ -239,6 +275,7 @@ function createDivider(a, b, container, overlay) {
       div.classList.remove('dragging');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      showSaveRatioBtn();
     };
 
     document.addEventListener('mousemove', onMove);

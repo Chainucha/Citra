@@ -141,6 +141,10 @@ function updateGroup(workspace, id, patch) {
   if (!group) return null;
   if ('activePreset' in patch && patch.activePreset) group.activePreset = patch.activePreset;
   if ('lockLayout' in patch) group.lockLayout = !!patch.lockLayout;
+  if ('splitRatio' in patch) {
+    if (patch.splitRatio == null) delete group.splitRatio;
+    else group.splitRatio = Math.max(0.1, Math.min(0.9, Number(patch.splitRatio)));
+  }
   if ('name' in patch && patch.name) {
     const trimmed = String(patch.name).trim();
     if (trimmed) group.name = trimmed;

@@ -26,4 +26,9 @@ contextBridge.exposeInMainWorld('sunkist', {
     ipcRenderer.on(CH.SESSION_STATE_CHANGED, handler);
     return () => ipcRenderer.removeListener(CH.SESSION_STATE_CHANGED, handler);
   },
+  onRatioChanged: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on(CH.LAYOUT_RATIO_CHANGED, handler);
+    return () => ipcRenderer.removeListener(CH.LAYOUT_RATIO_CHANGED, handler);
+  },
 });

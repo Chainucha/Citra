@@ -51,9 +51,14 @@ body { background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
 .group-btn.danger-text { color: #f87171; }
 .group-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
                  padding-top: 8px; border-top: 1px solid #1e293b; }
-.group-toolbar .preset-row { margin: 0; }
 .group-toolbar .apply-btn  { padding: 6px 14px; font-size: 12px; }
 .group-toolbar .btn-toggle { padding: 6px 10px; font-size: 11px; }
+.preset-select { background: #0f172a; border: 1px solid #334155; color: #fff;
+                 padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+.preset-select:hover { border-color: #f59e0b; }
+.ratio-display { font-size: 11px; color: #aaa; font-family: monospace;
+                 padding: 4px 8px; background: #0f172a; border-radius: 4px;
+                 font-variant-numeric: tabular-nums; }
 .section-label.inline { margin: 0; }
 .empty-group { color: #666; font-size: 12px; padding: 8px 0; font-style: italic; }
 .card-group-select { width: 100%; background: #0f172a; border: 1px solid #334155;
@@ -73,11 +78,6 @@ body { background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
 .card-btn.danger:hover { background: #991b1b; }
 
 .panel-section { margin-bottom: 24px; }
-.preset-row { display: flex; gap: 8px; margin: 8px 0 12px; }
-.preset-btn { background: #0f3460; border: 1px solid transparent; color: #fff;
-              padding: 8px 14px; cursor: pointer; border-radius: 4px; font-size: 12px; }
-.preset-btn:hover { border-color: #f59e0b; }
-.preset-btn.active { background: #f59e0b; color: #000; font-weight: 600; }
 .action-row { display: flex; align-items: center; gap: 12px; }
 .btn-primary, .btn-accent, .btn-secondary {
   border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; font-weight: 600;
@@ -105,6 +105,13 @@ body { background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
 .hotkey-table td { padding: 4px 16px 4px 0; color: #ccc; }
 .hotkey-table td:first-child { font-family: monospace; color: #f59e0b; }
 .note { font-size: 11px; color: #666; margin-top: 8px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
+::-webkit-scrollbar-corner { background: transparent; }
 
 /* Dialogs (Add / Rename Session, Group) */
 #dlg-add, #dlg-rename, #dlg-group {

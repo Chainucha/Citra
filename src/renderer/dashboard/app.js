@@ -1,6 +1,25 @@
 let workspace = { sessions: [], groups: [] };
 let statusTimer = null;
 
+const PRESET_INFO = {
+  'split-h-50': { dir: 'row',    ratio: 0.5, label: '50 / 50' },
+  'split-h-70': { dir: 'row',    ratio: 0.7, label: '70 / 30' },
+  'split-h-30': { dir: 'row',    ratio: 0.3, label: '30 / 70' },
+  'split-v-50': { dir: 'column', ratio: 0.5, label: '50 / 50' },
+  'split-v-70': { dir: 'column', ratio: 0.7, label: '70 / 30' },
+  'split-v-30': { dir: 'column', ratio: 0.3, label: '30 / 70' },
+};
+
+function ratioLabel(group) {
+  const info = PRESET_INFO[group.activePreset] || PRESET_INFO['split-h-50'];
+  const ratio = group.splitRatio ?? info.ratio;
+  const a = Math.round(ratio * 100);
+  const b = 100 - a;
+  const dir = info.dir === 'row' ? 'H' : 'V';
+  const tag = group.splitRatio != null ? ' · custom' : '';
+  return `${a} / ${b} ${dir}${tag}`;
+}
+
 function esc(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -64,8 +83,11 @@ function renderGroupSection(group) {
   const groupOptions = workspace.groups.map(o =>
     `<option value="${o.id}">${esc(o.name)}</option>`).join('');
 
-  const presetBtn = (preset, label) =>
-    `<button class="preset-btn ${group.activePreset === preset ? 'active' : ''}" data-group="${group.id}" data-preset="${preset}">${label}</button>`;
+  const presetOpt = (preset) => {
+    const info = PRESET_INFO[preset];
+    const sel  = group.activePreset === preset ? 'selected' : '';
+    return `<option value="${preset}" ${sel}>${info.label}</option>`;
+  };
 
   const cards = sessions.length === 0
     ? `<div class="empty-group">No sessions in this group. Use "+ Add Session" to add one.</div>`
@@ -106,14 +128,19 @@ function renderGroupSection(group) {
 
       <div class="group-toolbar">
         <span class="section-label inline">LAYOUT</span>
-        <div class="preset-row">
-          ${presetBtn('split-h-50', '50/50 H')}
-          ${presetBtn('split-v-50', '50/50 V')}
-          ${presetBtn('split-h-70', '70/30 H')}
-          ${presetBtn('split-v-70', '70/30 V')}
-          ${presetBtn('split-h-30', '30/70 H')}
-          ${presetBtn('split-v-30', '30/70 V')}
-        </div>
+        <select class="preset-select" data-group="${group.id}">
+          <optgroup label="Horizontal">
+            ${presetOpt('split-h-50')}
+            ${presetOpt('split-h-70')}
+            ${presetOpt('split-h-30')}
+          </optgroup>
+          <optgroup label="Vertical">
+            ${presetOpt('split-v-50')}
+            ${presetOpt('split-v-70')}
+            ${presetOpt('split-v-30')}
+          </optgroup>
+        </select>
+        <span class="ratio-display">${esc(ratioLabel(group))}</span>
         <button class="btn-primary apply-btn" data-group-action="apply" data-id="${group.id}" ${!anyActive ? 'disabled' : ''}>Apply</button>
         <button class="btn-toggle ${group.lockLayout ? 'locked' : ''}" data-group-action="lock" data-id="${group.id}" aria-pressed="${group.lockLayout}">
           ${group.lockLayout ? '🔒 Locked' : '🔓 Unlocked'}
@@ -161,14 +188,15 @@ function attachGroupHandlers(root) {
     });
   });
 
-  // Preset selection (per group)
-  root.querySelectorAll('.preset-btn').forEach(b => {
-    b.addEventListener('click', async () => {
-      const groupId = b.dataset.group;
-      const preset  = b.dataset.preset;
+  // Preset selection (per group) — picking a new preset clears any custom
+  // saved splitRatio so the chosen preset's default ratio applies cleanly.
+  root.querySelectorAll('.preset-select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const groupId = sel.dataset.group;
+      const preset  = sel.value;
       const group   = workspace.groups.find(g => g.id === groupId);
-      if (group) group.activePreset = preset;
-      await window.sunkist.updateGroup(groupId, { activePreset: preset });
+      if (group) { group.activePreset = preset; delete group.splitRatio; }
+      await window.sunkist.updateGroup(groupId, { activePreset: preset, splitRatio: null });
       renderAll();
     });
   });
@@ -338,6 +366,21 @@ btnHover.addEventListener('click', async () => {
   renderHover(next);
   await window.sunkist.setHoverFocus(next, hoverDelayMs);
   setStatus(next ? 'Hover focus on' : 'Hover focus off');
+});
+
+window.sunkist.onRatioChanged(({ groupId, ratio }) => {
+  // Update display inline — no full rerender needed
+  const section = document.querySelector(`.group-section[data-group-id="${groupId}"]`);
+  if (!section) return;
+  const display = section.querySelector('.ratio-display');
+  if (!display) return;
+  const group = workspace.groups.find(g => g.id === groupId);
+  if (!group) return;
+  const info = PRESET_INFO[group.activePreset] || PRESET_INFO['split-h-50'];
+  const a = Math.round(ratio * 100);
+  const b = 100 - a;
+  const dir = info.dir === 'row' ? 'H' : 'V';
+  display.textContent = `${a} / ${b} ${dir} · live`;
 });
 
 async function init() {

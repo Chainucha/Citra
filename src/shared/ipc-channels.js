@@ -23,4 +23,6 @@ module.exports = {
   GAME_UPDATE:          'game:update',
   GAME_READY:           'game:ready',
   GAME_FOCUS_WEBVIEW:   'game:focusWebview',
+  SAVE_LAYOUT_RATIO:    'layout:saveRatio',
+  LAYOUT_RATIO_CHANGED: 'layout:ratioChanged',
 };

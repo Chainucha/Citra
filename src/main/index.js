@@ -68,6 +68,7 @@ function sendGameUpdate(groupId, applyRatio = false) {
     sessions:   active.map(({ id, name, url, accentColor }) => ({ id, name, url, accentColor })),
     preset:     group.activePreset || 'split-h-50',
     lockLayout: !!group.lockLayout,
+    savedRatio: group.splitRatio ?? null,
     hoverFocusEnabled: !!workspace.hoverFocusEnabled,
     hoverFocusDelayMs: workspace.hoverFocusDelayMs || 400,
     applyRatio,
@@ -322,6 +323,19 @@ app.whenReady().then(() => {
   ipcMain.on(CH.GAME_READY, (e) => {
     const groupId = getGroupIdByWebContents(e.sender);
     if (groupId) sendGameUpdate(groupId);
+  });
+
+  // Live drag ratio — forward to dashboard for display, not persisted
+  ipcMain.on(CH.LAYOUT_RATIO_CHANGED, (_e, { groupId, ratio }) => {
+    safeSend(CH.LAYOUT_RATIO_CHANGED, { groupId, ratio });
+  });
+
+  ipcMain.handle(CH.SAVE_LAYOUT_RATIO, (_e, { groupId, ratio }) => {
+    const group = findGroup(groupId);
+    if (!group) return { error: 'Group not found' };
+    group.splitRatio = Math.max(0.1, Math.min(0.9, ratio));
+    saveWorkspace(workspace);
+    return { ok: true };
   });
 
   ipcMain.handle(CH.SET_HOVER_FOCUS, (_e, { enabled, delayMs }) => {
