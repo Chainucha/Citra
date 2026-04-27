@@ -18,6 +18,7 @@ module.exports = {
   CLOSE_GROUP:          'group:close',
   OVERLAY_FOCUS:        'overlay:focus',
   OVERLAY_INTERACTIVE:  'overlay:setInteractive',
+  OPEN_DASHBOARD:       'dashboard:open',
   SESSION_STATE_CHANGED:'session:stateChanged',
   SET_HOVER_FOCUS:      'settings:setHoverFocus',
   GAME_UPDATE:          'game:update',

@@ -177,8 +177,38 @@ function createWrapper(session) {
   dot.className = 'dot';
   dot.style.background = session.accentColor || '#f59e0b';
   const name = document.createElement('span');
+  name.className = 'name';
   name.textContent = session.name || 'Session';
-  label.append(dot, name);
+
+  const btnMenu = document.createElement('button');
+  btnMenu.className = 'menu-btn';
+  btnMenu.title = 'More';
+  btnMenu.innerHTML = '&#9663;';
+
+  const menu = document.createElement('div');
+  menu.className = 'session-menu hidden';
+  const itemDash = document.createElement('button');
+  itemDash.textContent = 'Open Manage Panel';
+  itemDash.addEventListener('click', () => {
+    window.gameBridge.openDashboard();
+    menu.classList.add('hidden');
+    btnMenu.classList.remove('open');
+  });
+  menu.append(itemDash);
+
+  btnMenu.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willHide = !menu.classList.contains('hidden');
+    menu.classList.toggle('hidden');
+    btnMenu.classList.toggle('open', !willHide);
+  });
+  // Close menu on click elsewhere or wrapper mouseleave
+  wrap.addEventListener('mouseleave', () => {
+    menu.classList.add('hidden');
+    btnMenu.classList.remove('open');
+  });
+
+  label.append(dot, name, btnMenu, menu);
 
   wv.addEventListener('focus',  () => wrap.classList.add('focused'));
   wv.addEventListener('blur',   () => wrap.classList.remove('focused'));
@@ -204,7 +234,7 @@ function syncLabel(session) {
   const label = wrap.querySelector('.session-label');
   if (!label) return;
   const dot  = label.querySelector('.dot');
-  const name = label.querySelector('span:last-child');
+  const name = label.querySelector('.name');
   if (dot)  dot.style.background = session.accentColor || '#f59e0b';
   if (name) name.textContent     = session.name || 'Session';
 }

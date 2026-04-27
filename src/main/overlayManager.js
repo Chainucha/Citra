@@ -52,7 +52,7 @@ function positionBadge(session) {
   if (!session.hwnd) return;
   try {
     const r = getRect(session.hwnd);
-    win.setBounds({ x: r.x + 5, y: r.y + 5, width: 220, height: 60 });
+    win.setBounds({ x: r.x + 5, y: r.y + 5, width: 180, height: 60 });
   } catch { /* window may have closed */ }
 }
 

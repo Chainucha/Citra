@@ -330,6 +330,24 @@ app.whenReady().then(() => {
     safeSend(CH.LAYOUT_RATIO_CHANGED, { groupId, ratio });
   });
 
+  ipcMain.on(CH.OVERLAY_INTERACTIVE, (e, { on }) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    win?.setIgnoreMouseEvents(!on, { forward: true });
+  });
+
+  ipcMain.on(CH.OVERLAY_FOCUS, (_e, { sessionId }) => {
+    const session = workspace.sessions.find(s => s.id === sessionId);
+    if (session?.hwnd) focusWindow(session.hwnd);
+  });
+
+  ipcMain.on(CH.OPEN_DASHBOARD, () => {
+    if (dashboard && !dashboard.isDestroyed()) {
+      if (dashboard.isMinimized()) dashboard.restore();
+      dashboard.show();
+      dashboard.focus();
+    }
+  });
+
   ipcMain.handle(CH.SAVE_LAYOUT_RATIO, (_e, { groupId, ratio }) => {
     const group = findGroup(groupId);
     if (!group) return { error: 'Group not found' };
