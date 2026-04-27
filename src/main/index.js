@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session } = require('electron');
+const { app, BrowserWindow, ipcMain, session: electronSession } = require('electron');
 const path = require('path');
 const CH = require('../shared/ipc-channels');
 const { loadWorkspace, saveWorkspace, addSession, deleteSession } = require('./workspaceController');
@@ -35,9 +35,7 @@ function createDashboard() {
   dashboard.loadFile(path.join(__dirname, '../renderer/dashboard/index.html'));
   if (process.env.NODE_ENV === 'dev') dashboard.webContents.openDevTools();
 }
-//logging
-app.commandLine.appendSwitch('enable-logging');
-app.commandLine.appendSwitch('v', '1');
+app.commandLine.appendSwitch('disk-cache-size', '52428800'); // 50MB
 
 app.whenReady().then(() => {
   createDashboard();
@@ -126,7 +124,15 @@ app.whenReady().then(() => {
     safeSend(CH.SESSION_STATE_CHANGED, { ...session });
     sendGameUpdate();
 
-    if (!workspace.sessions.some(s => s.state !== 'idle')) destroyContainer();
+    if (!workspace.sessions.some(s => s.state !== 'idle')) {
+      destroyContainer();
+      // Free per-session GPU/SW caches on full shutdown — keep cookies/localStorage for re-login
+      workspace.sessions.forEach(s => {
+        electronSession.fromPartition(`persist:${s.id}`)
+          .clearStorageData({ storages: ['serviceworkers', 'shadercache', 'cachestorage'] })
+          .catch(() => {});
+      });
+    }
 
     rebindHotkeys();
     return { ok: true };
@@ -138,7 +144,7 @@ app.whenReady().then(() => {
     if (target.state !== 'idle') return { error: 'Close session before deleting' };
     if (!deleteSession(workspace, id)) return { error: 'Delete failed' };
     saveWorkspace(workspace);
-    try { await session.fromPartition(`persist:${id}`).clearStorageData(); } catch {}
+    try { await electronSession.fromPartition(`persist:${id}`).clearStorageData(); } catch {}
     rebindHotkeys();
     return { ok: true };
   });

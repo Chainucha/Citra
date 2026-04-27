@@ -44,7 +44,9 @@ function getContainerHwnd() {
 }
 
 function destroyContainer() {
-  if (containerWin && !containerWin.isDestroyed()) containerWin.destroy();
+  if (!containerWin || containerWin.isDestroyed()) { containerWin = null; return; }
+  containerWin.removeAllListeners('close');
+  try { containerWin.close(); } catch { containerWin.destroy(); }
   containerWin = null;
 }
 
