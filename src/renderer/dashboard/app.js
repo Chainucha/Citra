@@ -320,8 +320,9 @@ dlgAdd.addEventListener('close', async () => {
   if (!addSubmit) return;
   const name = dlgInput.value.trim();
   if (!name) return;
-  const session = await window.sunkist.addSession(name, dlgGroupSel.value);
-  workspace.sessions.push(session);
+  const r = await window.sunkist.addSession(name, dlgGroupSel.value);
+  if (r?.error) { setStatus(r.error, true); return; }
+  workspace.sessions.push(r);
   renderAll();
 });
 
