@@ -11,6 +11,8 @@ ToS-compliant multi-client launcher for Flyff Universe. Manage many accounts in 
 - **Focus indicator** — accent-colored session badge highlights the focused pane.
 - **Global hotkeys** — per-session accelerators focus an account from anywhere. `Tab` cycles focus inside the active group window. `F11` toggles fullscreen on the active group.
 - **Hover focus** (optional) — automatically focus a pane when the mouse hovers over it for a configurable delay.
+- **Manage Panel from any pane** — each session badge has a dropdown to reopen the dashboard. If the manager window was closed, it is recreated; otherwise restored and focused.
+- **Manager stays in front on launch** — launching a group spawns the container window without stealing focus from the dashboard, so you can keep managing while the panes load.
 
 ## How it works
 
