@@ -341,11 +341,13 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on(CH.OPEN_DASHBOARD, () => {
-    if (dashboard && !dashboard.isDestroyed()) {
-      if (dashboard.isMinimized()) dashboard.restore();
-      dashboard.show();
-      dashboard.focus();
+    if (!dashboard || dashboard.isDestroyed()) {
+      createDashboard();
+      return;
     }
+    if (dashboard.isMinimized()) dashboard.restore();
+    dashboard.show();
+    dashboard.focus();
   });
 
   ipcMain.handle(CH.SAVE_LAYOUT_RATIO, (_e, { groupId, ratio }) => {
