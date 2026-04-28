@@ -12,11 +12,10 @@ const {
   getGroupIdByWebContents, isAnyContainerAlive,
 } = require('./browserInstanceManager');
 const {
-  bindHotkeys, unbindGroup, unbindAll, recordFocus,
+  bindHotkeys, unbindGroup, unbindAll,
   enableContainerHotkeys, disableContainerHotkeys,
 } = require('./focusController');
 const { focusWindow } = require('./win32/windowOps');
-const { stopTracking } = require('./overlayManager');
 const hoverFocus = require('./hoverFocus');
 
 // Single instance — two Citras would fight over hotkeys
@@ -244,7 +243,6 @@ app.whenReady().then(() => {
     const session = workspace.sessions.find(s => s.id === id);
     if (!session?.hwnd) return { error: 'Session has no tracked window' };
     focusWindow(session.hwnd);
-    recordFocus(session.groupId, id);
     sendToContainer(session.groupId, CH.GAME_FOCUS_WEBVIEW, { id });
     sessionsOfGroup(session.groupId).forEach(s => { if (s.state === 'active') s.state = 'arranged'; });
     session.state = 'active';
@@ -331,19 +329,20 @@ app.whenReady().then(() => {
     if (groupId) sendGameUpdate(groupId);
   });
 
+  // Container reports webview focus changes (user click, programmatic focus).
+  // Keeps session.state in sync so cycleFocus picks the correct "current".
+  ipcMain.on(CH.GAME_REPORT_FOCUS, (_e, { groupId, id }) => {
+    const session = workspace.sessions.find(s => s.id === id);
+    if (!session || session.groupId !== groupId) return;
+    if (session.state === 'active') return;
+    sessionsOfGroup(groupId).forEach(s => { if (s.state === 'active') s.state = 'arranged'; });
+    session.state = 'active';
+    sessionsOfGroup(groupId).forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
+  });
+
   // Live drag ratio — forward to dashboard for display, not persisted
   ipcMain.on(CH.LAYOUT_RATIO_CHANGED, (_e, { groupId, ratio }) => {
     safeSend(CH.LAYOUT_RATIO_CHANGED, { groupId, ratio });
-  });
-
-  ipcMain.on(CH.OVERLAY_INTERACTIVE, (e, { on }) => {
-    const win = BrowserWindow.fromWebContents(e.sender);
-    win?.setIgnoreMouseEvents(!on, { forward: true });
-  });
-
-  ipcMain.on(CH.OVERLAY_FOCUS, (_e, { sessionId }) => {
-    const session = workspace.sessions.find(s => s.id === sessionId);
-    if (session?.hwnd) focusWindow(session.hwnd);
   });
 
   ipcMain.on(CH.OPEN_DASHBOARD, () => {
@@ -374,7 +373,7 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('before-quit', () => { stopTracking(); unbindAll(); hoverFocus.stop(); });
+app.on('before-quit', () => { unbindAll(); hoverFocus.stop(); });
 app.on('window-all-closed', () => app.quit());
 
 module.exports = { workspace };

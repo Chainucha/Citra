@@ -61,10 +61,6 @@ function isContainerAlive(groupId) {
   return win != null && !win.isDestroyed();
 }
 
-function getContainerWindow(groupId) {
-  return isContainerAlive(groupId) ? containers.get(groupId) : null;
-}
-
 function maximizeContainer(groupId) {
   const win = containers.get(groupId);
   if (win && !win.isDestroyed()) win.maximize();
@@ -87,24 +83,13 @@ function getGroupIdByWebContents(webContents) {
   return null;
 }
 
-function getFocusedGroupId() {
-  for (const [groupId, win] of containers) {
-    if (!win.isDestroyed() && win.isFocused()) return groupId;
-  }
-  return null;
-}
-
 function isAnyContainerAlive() {
   for (const win of containers.values()) if (!win.isDestroyed()) return true;
   return false;
 }
 
-function getAllGroupIds() {
-  return [...containers.keys()].filter(id => isContainerAlive(id));
-}
-
 module.exports = {
-  ensureContainer, sendToContainer, getContainerHwnd, getContainerWindow,
+  ensureContainer, sendToContainer, getContainerHwnd,
   destroyContainer, isContainerAlive, maximizeContainer, toggleFullscreenContainer,
-  getGroupIdByWebContents, getFocusedGroupId, isAnyContainerAlive, getAllGroupIds,
+  getGroupIdByWebContents, isAnyContainerAlive,
 };

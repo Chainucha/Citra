@@ -11,9 +11,6 @@
     "electron-store": "^8.2.0",
     "koffi": "^2.10.0"
   },
-  "optionalDependencies": {
-    "uiohook-napi": "^1.5.4"
-  },
   "devDependencies": {
     "electron": "^30.0.0",
     "electron-builder": "^24.0.0"
