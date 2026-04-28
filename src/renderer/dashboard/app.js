@@ -47,7 +47,7 @@ function renderSidebar() {
   list.innerHTML = sessions.map((s, i) => {
     const group = workspace.groups.find(g => g.id === s.groupId);
     return `
-    <li>
+    <li draggable="true" data-id="${s.id}" data-state="${esc(s.state)}">
       <span class="dot" style="background:${esc(s.accentColor)}"></span>
       <span class="session-name" title="${esc(s.name)} — ${esc(group?.name || '')}">${esc(s.name)}</span>
       <span class="session-state ${esc(s.state)}">${esc(s.state)}</span>
@@ -57,6 +57,7 @@ function renderSidebar() {
       ${s.hwnd ? `<button class="btn-focus" data-id="${s.id}">&#9654;</button>` : ''}
     </li>`;
   }).join('');
+
   list.querySelectorAll('.btn-focus').forEach(b =>
     b.addEventListener('click', () => window.sunkist.focusSession(b.dataset.id)));
   list.querySelectorAll('.btn-rename').forEach(b =>
@@ -68,6 +69,18 @@ function renderSidebar() {
       if (r?.sessions) workspace.sessions = r.sessions;
       renderAll();
     }));
+
+  list.querySelectorAll('li[draggable]').forEach(li => {
+    li.addEventListener('dragstart', e => {
+      if (li.dataset.state !== 'idle') { e.preventDefault(); return; }
+      e.dataTransfer.setData('text/session-id', li.dataset.id);
+      e.dataTransfer.effectAllowed = 'move';
+      li.classList.add('dragging');
+    });
+    li.addEventListener('dragend', () => {
+      li.classList.remove('dragging');
+    });
+  });
 }
 
 function renderGroups() {
@@ -80,8 +93,6 @@ function renderGroupSection(group) {
   const sessions = workspace.sessions.filter(s => s.groupId === group.id);
   const anyActive = sessions.some(s => s.state !== 'idle');
   const idleCount = sessions.filter(s => s.state === 'idle').length;
-  const groupOptions = workspace.groups.map(o =>
-    `<option value="${o.id}">${esc(o.name)}</option>`).join('');
 
   const presetOpt = (preset) => {
     const info = PRESET_INFO[preset];
@@ -91,26 +102,21 @@ function renderGroupSection(group) {
 
   const cards = sessions.length === 0
     ? `<div class="empty-group">No sessions in this group. Use "+ Add Session" to add one.</div>`
-    : sessions.map(s => {
-        const groupSelect = `
-          <select class="card-group-select" data-id="${s.id}" ${s.state !== 'idle' ? 'disabled' : ''} title="Move to group">
-            ${workspace.groups.map(o =>
-              `<option value="${o.id}" ${o.id === s.groupId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}
-          </select>`;
-        return `
-          <div class="session-card" style="border-top: 3px solid ${esc(s.accentColor)}">
-            <div class="card-name">${esc(s.name)}</div>
-            <div class="card-state ${esc(s.state)}">${esc(s.state)}</div>
-            <div class="card-hwnd">${s.hwnd ? `HWND 0x${Number(s.hwnd).toString(16).toUpperCase()}` : '—'}</div>
-            ${groupSelect}
-            <button class="card-btn" data-action="rename" data-id="${s.id}" data-name="${esc(s.name)}">Rename</button>
-            ${s.state === 'idle'
-              ? `<button class="card-btn" data-action="launch" data-id="${s.id}">Launch</button>
-                 <button class="card-btn danger" data-action="delete" data-id="${s.id}" data-name="${esc(s.name)}">Delete</button>`
-              : `<button class="card-btn danger" data-action="close" data-id="${s.id}">Close</button>`
-            }
-          </div>`;
-      }).join('');
+    : sessions.map(s => `
+          <div class="session-card" draggable="true" data-id="${s.id}" data-state="${esc(s.state)}"
+               style="border-top: 3px solid ${esc(s.accentColor)}">
+            <div class="card-header">
+              <span class="card-name">${esc(s.name)}</span>
+              <span class="card-state ${esc(s.state)}">${esc(s.state)}</span>
+            </div>
+            <div class="card-actions">
+              <button class="card-btn" data-action="rename" data-id="${s.id}" data-name="${esc(s.name)}">Rename</button>
+              ${s.state === 'idle'
+                ? `<button class="card-btn" data-action="launch" data-id="${s.id}">Launch</button>
+                   <button class="card-btn danger" data-action="delete" data-id="${s.id}" data-name="${esc(s.name)}">Delete</button>`
+                : `<button class="card-btn danger" data-action="close" data-id="${s.id}">Close</button>`}
+            </div>
+          </div>`).join('');
 
   return `
     <section class="group-section" data-group-id="${group.id}">
@@ -125,6 +131,8 @@ function renderGroupSection(group) {
       </header>
 
       <div class="cards-row">${cards}</div>
+
+      <button class="btn-secondary group-add-session" data-group-action="add-session" data-id="${group.id}">+ Add Session</button>
 
       <div class="group-toolbar">
         <span class="section-label inline">LAYOUT</span>
@@ -174,10 +182,39 @@ function attachGroupHandlers(root) {
     });
   });
 
-  // Move-to-group dropdown
-  root.querySelectorAll('.card-group-select').forEach(sel => {
-    sel.addEventListener('change', async () => {
-      const r = await window.sunkist.moveSessionToGroup(sel.dataset.id, sel.value);
+  // Card drag-and-drop sources
+  root.querySelectorAll('.session-card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      if (card.dataset.state !== 'idle') { e.preventDefault(); return; }
+      e.dataTransfer.setData('text/session-id', card.dataset.id);
+      e.dataTransfer.effectAllowed = 'move';
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+    });
+  });
+
+  // Group sections as drop targets
+  root.querySelectorAll('.group-section').forEach(section => {
+    section.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      section.classList.add('drag-over');
+    });
+    section.addEventListener('dragleave', e => {
+      if (!section.contains(e.relatedTarget)) {
+        section.classList.remove('drag-over');
+      }
+    });
+    section.addEventListener('drop', async e => {
+      e.preventDefault();
+      section.classList.remove('drag-over');
+      const sessionId = e.dataTransfer.getData('text/session-id');
+      const groupId = section.dataset.groupId;
+      const session = workspace.sessions.find(s => s.id === sessionId);
+      if (!session || session.groupId === groupId) return;
+      const r = await window.sunkist.moveSessionToGroup(sessionId, groupId);
       if (r?.error) { setStatus(r.error, true); return; }
       if (r?.session) {
         const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
@@ -233,6 +270,15 @@ function attachGroupHandlers(root) {
         if (r.workspace) workspace = r.workspace;
         renderAll();
         setStatus('Group deleted');
+      } else if (groupAction === 'add-session') {
+        dlgInput.value = `Account ${workspace.sessions.length + 1}`;
+        dlgGroupSel.innerHTML = workspace.groups.map(g =>
+          `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+        dlgGroupSel.value = id;
+        dlgGroupSel.disabled = true;
+        addSubmit = false;
+        dlgAdd.showModal();
+        dlgInput.select();
       }
     });
   });
@@ -270,11 +316,13 @@ dlgAdd.querySelector('form').addEventListener('submit', () => { addSubmit = true
 document.getElementById('dlg-add-cancel').addEventListener('click', () => dlgAdd.close());
 
 dlgAdd.addEventListener('close', async () => {
+  dlgGroupSel.disabled = false;
   if (!addSubmit) return;
   const name = dlgInput.value.trim();
   if (!name) return;
-  const session = await window.sunkist.addSession(name, dlgGroupSel.value);
-  workspace.sessions.push(session);
+  const r = await window.sunkist.addSession(name, dlgGroupSel.value);
+  if (r?.error) { setStatus(r.error, true); return; }
+  workspace.sessions.push(r);
   renderAll();
 });
 

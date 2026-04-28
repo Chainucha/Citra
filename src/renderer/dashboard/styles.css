@@ -11,7 +11,7 @@ body { background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
                  text-transform: uppercase; margin-bottom: 8px; }
 #session-list { list-style: none; flex: 1; }
 #session-list li { display: flex; align-items: center; gap: 8px; padding: 6px 4px;
-                   font-size: 13px; border-radius: 4px; cursor: default; }
+                   font-size: 13px; border-radius: 4px; cursor: grab; }
 #session-list li:hover { background: #1e3a5f; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .session-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -68,23 +68,22 @@ body { background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
                  font-variant-numeric: tabular-nums; }
 .section-label.inline { margin: 0; }
 .empty-group { color: #666; font-size: 12px; padding: 8px 0; font-style: italic; }
-.card-group-select {
-  appearance: none; -webkit-appearance: none;
-  width: 100%;
-  background: #0f172a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center;
-  border: 1px solid #334155; color: #ccc;
-  padding: 4px 24px 4px 8px; border-radius: 6px;
-  font-size: 11px; margin-top: 8px; cursor: pointer;
-  transition: border-color 0.15s; outline: none;
-}
-.card-group-select:hover:not(:disabled) { border-color: #f59e0b; }
-.card-group-select:focus { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,.2); }
-.card-group-select:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Drag & drop */
+#session-list li.dragging { opacity: 0.4; cursor: grabbing; }
+.session-card[draggable="true"] { cursor: grab; }
+.session-card.dragging { opacity: 0.4; }
+.group-section.drag-over { outline: 2px dashed var(--accent, #7c6af7); outline-offset: -4px; }
 .session-card { background: #16213e; border-radius: 8px; padding: 16px;
                 width: 200px; border: 1px solid #1e3a5f; }
-.card-name { font-weight: 700; margin-bottom: 4px; }
-.card-state { font-size: 11px; margin-bottom: 8px; }
-.card-hwnd { font-size: 10px; color: #666; font-family: monospace; }
+
+/* Card layout */
+.card-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card-name { font-weight: 700; }
+.card-state { font-size: 11px; }
+.card-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+
+/* Per-group add button */
+.group-add-session { width: 100%; margin-top: 8px; }
 .card-btn { background: #0f3460; border: none; color: #fff; padding: 6px 12px;
             cursor: pointer; border-radius: 4px; font-size: 11px; margin-top: 8px;
             margin-right: 4px; }
