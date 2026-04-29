@@ -18,7 +18,7 @@ const {
 const { focusWindow } = require('./win32/windowOps');
 const hoverFocus = require('./hoverFocus');
 
-// Single instance — two Citras would fight over hotkeys
+// Single instance — two Phayuras would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 // ── Performance switches (must run before app.whenReady) ──
@@ -53,7 +53,10 @@ function findGroup(groupId) {
 
 function applyHoverFocus() {
   if (workspace.hoverFocusEnabled) {
-    hoverFocus.start(() => workspace.sessions);
+    hoverFocus.start(
+      () => workspace.sessions,
+      () => workspace.hoverFocusDelayMs ?? 120,
+    );
   } else {
     hoverFocus.stop();
   }
@@ -158,6 +161,7 @@ function closeSessionInternal(session) {
 function createDashboard() {
   dashboard = new BrowserWindow({
     width: 980, height: 640,
+    icon: path.join(__dirname, '../../assets/icon.ico'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

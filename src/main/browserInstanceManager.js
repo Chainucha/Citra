@@ -11,6 +11,7 @@ function ensureContainer(groupId, onClosedOnce) {
     width: 1280,
     height: 720,
     autoHideMenuBar: true,
+    icon: path.join(__dirname, '../../assets/icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

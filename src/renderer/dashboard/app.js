@@ -28,7 +28,7 @@ function esc(str) {
     .replace(/"/g, '&quot;');
 }
 
-window.sunkist.onSessionChanged((updated) => {
+window.phayura.onSessionChanged((updated) => {
   const idx = workspace.sessions.findIndex(s => s.id === updated.id);
   if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...updated };
   else workspace.sessions.push(updated);
@@ -59,12 +59,12 @@ function renderSidebar() {
   }).join('');
 
   list.querySelectorAll('.btn-focus').forEach(b =>
-    b.addEventListener('click', () => window.sunkist.focusSession(b.dataset.id)));
+    b.addEventListener('click', () => window.phayura.focusSession(b.dataset.id)));
   list.querySelectorAll('.btn-rename').forEach(b =>
     b.addEventListener('click', () => openRename(b.dataset.id, b.dataset.name)));
   list.querySelectorAll('.btn-move').forEach(b =>
     b.addEventListener('click', async () => {
-      const r = await window.sunkist.reorderSession(b.dataset.id, b.dataset.dir);
+      const r = await window.phayura.reorderSession(b.dataset.id, b.dataset.dir);
       if (r?.error) { setStatus(r.error, true); return; }
       if (r?.sessions) workspace.sessions = r.sessions;
       renderAll();
@@ -164,16 +164,16 @@ function attachGroupHandlers(root) {
       const { action, id, name } = b.dataset;
       if (action === 'launch') {
         setStatus('Launching…');
-        const r = await window.sunkist.launchSession(id);
+        const r = await window.phayura.launchSession(id);
         setStatus(r.error ? r.error : 'Launched', !!r.error);
       } else if (action === 'close') {
-        await window.sunkist.closeSession(id);
+        await window.phayura.closeSession(id);
         setStatus('Closed');
       } else if (action === 'rename') {
         openRename(id, name);
       } else if (action === 'delete') {
         if (!confirm(`Delete session "${name}"? Cookies and storage for this account will be removed on next launch.`)) return;
-        const r = await window.sunkist.deleteSession(id);
+        const r = await window.phayura.deleteSession(id);
         if (r.error) { setStatus(r.error, true); return; }
         workspace.sessions = workspace.sessions.filter(s => s.id !== id);
         renderAll();
@@ -214,7 +214,7 @@ function attachGroupHandlers(root) {
       const groupId = section.dataset.groupId;
       const session = workspace.sessions.find(s => s.id === sessionId);
       if (!session || session.groupId === groupId) return;
-      const r = await window.sunkist.moveSessionToGroup(sessionId, groupId);
+      const r = await window.phayura.moveSessionToGroup(sessionId, groupId);
       if (r?.error) { setStatus(r.error, true); return; }
       if (r?.session) {
         const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
@@ -233,7 +233,7 @@ function attachGroupHandlers(root) {
       const preset  = sel.value;
       const group   = workspace.groups.find(g => g.id === groupId);
       if (group) { group.activePreset = preset; delete group.splitRatio; }
-      await window.sunkist.updateGroup(groupId, { activePreset: preset, splitRatio: null });
+      await window.phayura.updateGroup(groupId, { activePreset: preset, splitRatio: null });
       renderAll();
     });
   });
@@ -244,28 +244,28 @@ function attachGroupHandlers(root) {
       const { groupAction, id, name } = b.dataset;
       if (groupAction === 'launch') {
         setStatus('Launching group…');
-        const r = await window.sunkist.launchGroup(id);
+        const r = await window.phayura.launchGroup(id);
         setStatus(r.error ? r.error : 'Group launched', !!r.error);
       } else if (groupAction === 'close') {
-        await window.sunkist.closeGroup(id);
+        await window.phayura.closeGroup(id);
         setStatus('Group closed');
       } else if (groupAction === 'apply') {
         const group = workspace.groups.find(g => g.id === id);
-        const r = await window.sunkist.applyLayout(id, group?.activePreset);
+        const r = await window.phayura.applyLayout(id, group?.activePreset);
         setStatus(r.error || 'Layout applied', !!r.error);
       } else if (groupAction === 'lock') {
         const group = workspace.groups.find(g => g.id === id);
         if (!group) return;
         const next = !group.lockLayout;
         group.lockLayout = next;
-        await window.sunkist.updateGroup(id, { lockLayout: next });
+        await window.phayura.updateGroup(id, { lockLayout: next });
         renderAll();
         setStatus(next ? 'Layout locked' : 'Layout unlocked');
       } else if (groupAction === 'rename') {
         openGroupDialog('rename', id, name);
       } else if (groupAction === 'delete') {
         if (!confirm(`Delete group "${name}"? Sessions will be moved to another group.`)) return;
-        const r = await window.sunkist.deleteGroup(id);
+        const r = await window.phayura.deleteGroup(id);
         if (r.error) { setStatus(r.error, true); return; }
         if (r.workspace) workspace = r.workspace;
         renderAll();
@@ -293,7 +293,7 @@ function setStatus(msg, isError = false) {
 }
 
 document.getElementById('btn-save').addEventListener('click', async () => {
-  await window.sunkist.saveWorkspace({});
+  await window.phayura.saveWorkspace({});
   setStatus('Saved');
 });
 
@@ -320,7 +320,7 @@ dlgAdd.addEventListener('close', async () => {
   if (!addSubmit) return;
   const name = dlgInput.value.trim();
   if (!name) return;
-  const r = await window.sunkist.addSession(name, dlgGroupSel.value);
+  const r = await window.phayura.addSession(name, dlgGroupSel.value);
   if (r?.error) { setStatus(r.error, true); return; }
   workspace.sessions.push(r);
   renderAll();
@@ -347,7 +347,7 @@ dlgRename.addEventListener('close', async () => {
   if (!renameSubmit || !renameTargetId) return;
   const name = dlgRenameInput.value.trim();
   if (!name) return;
-  const r = await window.sunkist.renameSession(renameTargetId, name);
+  const r = await window.phayura.renameSession(renameTargetId, name);
   if (r?.error) { setStatus(r.error, true); return; }
   const idx = workspace.sessions.findIndex(s => s.id === renameTargetId);
   if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...r.session };
@@ -386,13 +386,13 @@ dlgGroup.addEventListener('close', async () => {
   const name = dlgGroupInput.value.trim();
   if (!name) return;
   if (groupDialogMode === 'add') {
-    const r = await window.sunkist.addGroup(name);
+    const r = await window.phayura.addGroup(name);
     if (r?.error) { setStatus(r.error, true); return; }
     workspace.groups.push(r.group);
     renderAll();
     setStatus('Group added');
   } else if (groupDialogMode === 'rename' && groupDialogId) {
-    const r = await window.sunkist.renameGroup(groupDialogId, name);
+    const r = await window.phayura.renameGroup(groupDialogId, name);
     if (r?.error) { setStatus(r.error, true); return; }
     const idx = workspace.groups.findIndex(g => g.id === groupDialogId);
     if (idx >= 0) workspace.groups[idx] = { ...workspace.groups[idx], ...r.group };
@@ -412,11 +412,11 @@ function renderHover(enabled) {
 btnHover.addEventListener('click', async () => {
   const next = btnHover.getAttribute('aria-pressed') !== 'true';
   renderHover(next);
-  await window.sunkist.setHoverFocus(next, 120);
+  await window.phayura.setHoverFocus(next, 120);
   setStatus(next ? 'Hover focus on' : 'Hover focus off');
 });
 
-window.sunkist.onRatioChanged(({ groupId, ratio }) => {
+window.phayura.onRatioChanged(({ groupId, ratio }) => {
   // Update display inline — no full rerender needed
   const section = document.querySelector(`.group-section[data-group-id="${groupId}"]`);
   if (!section) return;
@@ -432,7 +432,7 @@ window.sunkist.onRatioChanged(({ groupId, ratio }) => {
 });
 
 async function init() {
-  workspace = await window.sunkist.getWorkspace();
+  workspace = await window.phayura.getWorkspace();
   workspace.sessions = workspace.sessions || [];
   workspace.groups   = workspace.groups   || [];
   hoverDelayMs = workspace.hoverFocusDelayMs ?? 0;

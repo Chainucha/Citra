@@ -1,5 +1,5 @@
 {
-  "name": "citra",
+  "name": "phayura",
   "version": "0.1.0",
   "description": "ToS-compliant window manager for Flyff Universe dual-clienting",
   "main": "src/main/index.js",
@@ -10,6 +10,18 @@
   "dependencies": {
     "electron-store": "^8.2.0",
     "koffi": "^2.10.0"
+  },
+  "build": {
+    "appId": "com.phayura.app",
+    "productName": "Phayura",
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
+    }
   },
   "devDependencies": {
     "electron": "^30.0.0",

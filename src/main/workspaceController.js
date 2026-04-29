@@ -1,7 +1,7 @@
 const { randomUUID } = require('crypto');
 const Store = require('electron-store');
 
-const store = new Store({ name: 'citra' });
+const store = new Store({ name: 'phayura' });
 
 function makeDefaultGroup(name = 'Group 1', preset = 'split-h-50', lock = false) {
   return { id: randomUUID(), name, activePreset: preset, lockLayout: lock };
