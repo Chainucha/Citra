@@ -194,7 +194,20 @@ function createWrapper(session) {
     menu.classList.add('hidden');
     btnMenu.classList.remove('open');
   });
-  menu.append(itemDash);
+
+  const itemSave = document.createElement('button');
+  itemSave.className = 'save-layout-item hidden';
+  itemSave.textContent = 'Save Layout';
+  if (saveRatioPending) itemSave.classList.remove('hidden');
+  itemSave.addEventListener('click', async () => {
+    await window.gameBridge.saveLayoutRatio(splitRatio);
+    menu.classList.add('hidden');
+    btnMenu.classList.remove('open');
+    setSaveRatioPending(false);
+    showToast('Layout saved');
+  });
+
+  menu.append(itemDash, itemSave);
 
   btnMenu.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -210,7 +223,10 @@ function createWrapper(session) {
 
   label.append(dot, name, btnMenu, menu);
 
-  wv.addEventListener('focus',  () => wrap.classList.add('focused'));
+  wv.addEventListener('focus',  () => {
+    wrap.classList.add('focused');
+    window.gameBridge.reportFocus(session.id);
+  });
   wv.addEventListener('blur',   () => wrap.classList.remove('focused'));
 
   wrap.addEventListener('mouseenter', () => {
@@ -244,30 +260,27 @@ function applyLockState() {
   dividerEl.classList.toggle('locked', locked);
 }
 
-// ── Save-ratio button ─────────────────────────────────────────────────────────
+// ── Save-ratio state ──────────────────────────────────────────────────────────
 
-let saveRatioBtn = null;
+let saveRatioPending = false;
 
-function getSaveRatioBtn() {
-  if (!saveRatioBtn) {
-    saveRatioBtn = document.createElement('button');
-    saveRatioBtn.id = 'btn-save-ratio';
-    saveRatioBtn.textContent = 'Save Layout';
-    saveRatioBtn.addEventListener('click', async () => {
-      await window.gameBridge.saveLayoutRatio(splitRatio);
-      hideSaveRatioBtn();
-    });
-    document.body.appendChild(saveRatioBtn);
+function setSaveRatioPending(pending) {
+  saveRatioPending = pending;
+  for (const wrap of wrappers.values()) {
+    wrap.querySelector('.save-layout-item')?.classList.toggle('hidden', !pending);
   }
-  return saveRatioBtn;
 }
 
-function showSaveRatioBtn() {
-  getSaveRatioBtn().classList.add('visible');
-}
+function showSaveRatioBtn() { setSaveRatioPending(true); }
+function hideSaveRatioBtn()  { setSaveRatioPending(false); }
 
-function hideSaveRatioBtn() {
-  saveRatioBtn?.classList.remove('visible');
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('visible'), 1800);
 }
 
 function createDivider(a, b, container, overlay) {

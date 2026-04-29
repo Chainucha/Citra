@@ -148,3 +148,6 @@ vite.config.ts.timestamp-*
 
 .claude/
 docs/
+CLAUDE.md
+log/
+*.bat
