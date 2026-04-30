@@ -1,16 +1,15 @@
 // src/shared/gridLayoutEngine.js
-//
-// Pure layout helpers shared by main and the container renderer. No Electron
-// imports — must work in both Node and the renderer.
 
 function computeAutoGrid(N, W, H) {
   if (N <= 0) return { cols: 0, rows: 0 };
   if (N === 1) return { cols: 1, rows: 1 };
-  const aspect = (W > 0 && H > 0) ? W / H : 16 / 9;
+  const safeW = W > 0 ? W : 16;
+  const safeH = H > 0 ? H : 9;
+  const aspect = safeW / safeH;
   let best = { cols: 1, rows: N, score: Infinity };
   for (let cols = 1; cols <= N; cols++) {
     const rows = Math.ceil(N / cols);
-    const cellAspect = (W / cols) / (H / rows);
+    const cellAspect = (safeW / cols) / (safeH / rows);
     const score = Math.abs(Math.log(cellAspect / aspect));
     if (score < best.score) best = { cols, rows, score };
   }
@@ -27,8 +26,7 @@ function normalizeRatios(arr, n) {
   while (a.length < n) a.push(0);
   const sum = a.reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0);
   if (sum <= 0) return uniformRatios(n);
-  return a.map(v => (Number.isFinite(v) && v > 0 ? v : 0) / sum)
-          .map(v => v > 0 ? v : 1 / n);
+  return a.map(v => (Number.isFinite(v) && v > 0 ? v : 0) / sum);
 }
 
 function cellKey(r, c) { return `${r},${c}`; }
@@ -43,7 +41,7 @@ function flattenCellMap(cellMap, cols, rows) {
   const out = [];
   for (const { r, c } of cellsRowMajor(cols, rows)) {
     const id = cellMap?.[cellKey(r, c)];
-    if (id) out.push(id);
+    if (id != null) out.push(id);
   }
   return out;
 }
