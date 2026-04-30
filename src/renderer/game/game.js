@@ -1,5 +1,3 @@
-const { cellKey, cellsRowMajor } = require('../../shared/gridLayoutEngine');
-
 const wrappers  = new Map();
 let dividers    = [];
 let layoutState = null;
