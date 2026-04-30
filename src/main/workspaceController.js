@@ -262,6 +262,7 @@ function reorderSession(workspace, id, direction) {
   if (idx < 0) return false;
   const target = direction === 'up' ? idx - 1 : idx + 1;
   if (target < 0 || target >= workspace.sessions.length) return false;
+  if (workspace.sessions[idx].groupId !== workspace.sessions[target].groupId) return false;
   const [moved] = workspace.sessions.splice(idx, 1);
   workspace.sessions.splice(target, 0, moved);
   return true;
