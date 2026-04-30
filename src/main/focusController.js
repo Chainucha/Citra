@@ -20,7 +20,7 @@ function recordFocus(groupId) {
 // Bind per-session global hotkeys for one group's sessions.
 // Per-session hotkeys are workspace-global (cannot collide between groups —
 // dashboard is responsible for unique accelerators).
-function bindHotkeys(groupId, sessions, onSwitch, shouldFire, onFullscreenCb) {
+function bindHotkeys(groupId, sessions, onSwitch, shouldFire, onFullscreenCb, cellOrder) {
   unbindGroup(groupId);
   const fire = shouldFire || (() => true);
 
@@ -36,7 +36,7 @@ function bindHotkeys(groupId, sessions, onSwitch, shouldFire, onFullscreenCb) {
     else console.warn(`[hotkey] Could not register "${accel}" — already claimed.`);
   });
 
-  cycleByGroup.set(groupId, { sessions, onSwitch });
+  cycleByGroup.set(groupId, { sessions, onSwitch, cellOrder });
   if (onFullscreenCb !== undefined) onFullscreen = onFullscreenCb;
 }
 
@@ -75,7 +75,7 @@ function focusedContainerGroupId() {
 }
 
 // Tab cycle: <=2 active sessions toggle to the other; 3+ round-robin by
-// session order starting from the current focus.
+// row-major cellMap order (via cellOrder callback) starting from current focus.
 function cycleFocus() {
   const groupId = focusedContainerGroupId();
   if (!groupId) return;
@@ -90,8 +90,13 @@ function cycleFocus() {
   if (active.length <= 2) {
     target = active.find(s => s.id !== currentId) || active[0];
   } else {
-    const idx = active.findIndex(s => s.id === currentId);
-    target = idx === -1 ? active[0] : active[(idx + 1) % active.length];
+    const order = (typeof state.cellOrder === 'function')
+      ? state.cellOrder().filter(id => active.some(s => s.id === id))
+      : active.map(s => s.id);
+    if (order.length === 0) return;
+    const idx = order.indexOf(currentId);
+    const nextId = idx === -1 ? order[0] : order[(idx + 1) % order.length];
+    target = active.find(s => s.id === nextId) || active[0];
   }
   if (!target) return;
 

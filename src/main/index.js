@@ -89,7 +89,6 @@ function rebindGroupHotkeys(groupId) {
     groupId,
     sessionsOfGroup(groupId),
     (focused) => {
-      // Drop active state on every session in this group; promote focused
       sessionsOfGroup(groupId).forEach(s => { if (s.state === 'active') s.state = 'arranged'; });
       focused.state = 'active';
       sessionsOfGroup(groupId).forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
@@ -97,6 +96,18 @@ function rebindGroupHotkeys(groupId) {
     },
     () => BrowserWindow.getFocusedWindow() !== null,
     (gid) => toggleFullscreenContainer(gid),
+    () => {
+      const g = findGroup(groupId);
+      if (!g || !g.layout) return [];
+      const out = [];
+      for (let r = 0; r < g.layout.rows; r++) {
+        for (let c = 0; c < g.layout.cols; c++) {
+          const id = g.layout.cellMap[`${r},${c}`];
+          if (id) out.push(id);
+        }
+      }
+      return out;
+    },
   );
 }
 
