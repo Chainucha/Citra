@@ -227,8 +227,9 @@ function createWrapper(session) {
   itemSave.className = 'save-layout-item hidden';
   itemSave.textContent = 'Save Layout';
   if (saveLayoutPending) itemSave.classList.remove('hidden');
-  itemSave.addEventListener('click', () => {
+  itemSave.addEventListener('click', async () => {
     closeMenu();
+    await window.gameBridge.saveLayout();
     saveLayoutPending = false;
     refreshSaveLayoutVisibility();
     showToast('Layout saved');
