@@ -5,6 +5,9 @@ const {
   loadWorkspace, saveWorkspace,
   addSession, deleteSession, renameSession, reorderSession, moveSessionToGroup,
   addGroup, deleteGroup, renameGroup, updateGroup,
+  ensureLayoutForCount, placeSessionInLayout,
+  setLayoutRatios, swapLayoutCells, setLayoutManual, applyResizeHint,
+  groupSessionIds,
 } = require('./workspaceController');
 const {
   ensureContainer, sendToContainer, getContainerHwnd, destroyContainer,
@@ -62,18 +65,22 @@ function applyHoverFocus() {
   }
 }
 
-function sendGameUpdate(groupId, applyRatio = false) {
+function sendGameUpdate(groupId) {
   const group = findGroup(groupId);
   if (!group) return;
   const active = sessionsOfGroup(groupId).filter(s => s.state !== 'idle');
   sendToContainer(groupId, CH.GAME_UPDATE, {
-    sessions:   active.map(({ id, name, url, accentColor }) => ({ id, name, url, accentColor })),
-    preset:     group.activePreset || 'split-h-50',
-    lockLayout: !!group.lockLayout,
-    savedRatio: group.splitRatio ?? null,
+    sessions: active.map(({ id, name, url, accentColor }) => ({ id, name, url, accentColor })),
+    layout: {
+      cols: group.layout.cols,
+      rows: group.layout.rows,
+      colRatios: group.layout.colRatios,
+      rowRatios: group.layout.rowRatios,
+      cellMap: group.layout.cellMap,
+      manual: group.layout.manual,
+    },
     hoverFocusEnabled: !!workspace.hoverFocusEnabled,
     hoverFocusDelayMs: workspace.hoverFocusDelayMs ?? 120,
-    applyRatio,
   });
 }
 
@@ -279,7 +286,6 @@ app.whenReady().then(() => {
     const group = updateGroup(workspace, id, patch || {});
     if (!group) return { error: 'Group not found' };
     saveWorkspace(workspace);
-    if (patch && 'lockLayout' in patch && isContainerAlive(id)) sendGameUpdate(id);
     return { ok: true, group: { ...group } };
   });
 
@@ -310,16 +316,12 @@ app.whenReady().then(() => {
     return { ok: true };
   });
 
-  ipcMain.handle(CH.APPLY_LAYOUT, (_e, { groupId, preset }) => {
+  ipcMain.handle(CH.APPLY_LAYOUT, (_e, { groupId }) => {
     const group = findGroup(groupId);
     if (!group) return { error: 'Group not found' };
-    group.activePreset = preset || group.activePreset;
-    saveWorkspace(workspace);
     if (!isContainerAlive(groupId)) return { error: 'No active game window' };
-
     maximizeContainer(groupId);
-    sendGameUpdate(groupId, true);
-
+    sendGameUpdate(groupId);
     sessionsOfGroup(groupId).filter(s => s.state !== 'idle').forEach(s => {
       s.state = 'arranged';
       safeSend(CH.SESSION_STATE_CHANGED, { ...s });
@@ -344,11 +346,6 @@ app.whenReady().then(() => {
     sessionsOfGroup(groupId).forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
   });
 
-  // Live drag ratio — forward to dashboard for display, not persisted
-  ipcMain.on(CH.LAYOUT_RATIO_CHANGED, (_e, { groupId, ratio }) => {
-    safeSend(CH.LAYOUT_RATIO_CHANGED, { groupId, ratio });
-  });
-
   ipcMain.on(CH.OPEN_DASHBOARD, () => {
     if (!dashboard || dashboard.isDestroyed()) {
       createDashboard();
@@ -359,14 +356,6 @@ app.whenReady().then(() => {
     dashboard.focus();
   });
 
-  ipcMain.handle(CH.SAVE_LAYOUT_RATIO, (_e, { groupId, ratio }) => {
-    const group = findGroup(groupId);
-    if (!group) return { error: 'Group not found' };
-    group.splitRatio = Math.max(0.1, Math.min(0.9, ratio));
-    saveWorkspace(workspace);
-    return { ok: true };
-  });
-
   ipcMain.handle(CH.SET_HOVER_FOCUS, (_e, { enabled, delayMs }) => {
     workspace.hoverFocusEnabled = !!enabled;
     workspace.hoverFocusDelayMs = delayMs ?? 120;
@@ -374,6 +363,57 @@ app.whenReady().then(() => {
     applyHoverFocus();
     workspace.groups.forEach(g => { if (isContainerAlive(g.id)) sendGameUpdate(g.id); });
     return { ok: true };
+  });
+
+  ipcMain.handle(CH.LAYOUT_UPDATE_RATIOS, (_e, { groupId, colRatios, rowRatios }) => {
+    const group = findGroup(groupId);
+    if (!group) return { error: 'Group not found' };
+    setLayoutRatios(group, colRatios, rowRatios);
+    saveWorkspace(workspace);
+    if (isContainerAlive(groupId)) sendGameUpdate(groupId);
+    return { ok: true };
+  });
+
+  ipcMain.handle(CH.LAYOUT_SWAP_CELLS, (_e, { groupId, fromCell, toCell }) => {
+    const group = findGroup(groupId);
+    if (!group) return { error: 'Group not found' };
+    if (!swapLayoutCells(group, fromCell, toCell)) return { error: 'Swap failed' };
+    saveWorkspace(workspace);
+    if (isContainerAlive(groupId)) sendGameUpdate(groupId);
+    return { ok: true };
+  });
+
+  ipcMain.on(CH.LAYOUT_RESIZE_HINT, (e, { width, height }) => {
+    const groupId = getGroupIdByWebContents(e.sender);
+    if (!groupId) return;
+    const group = findGroup(groupId);
+    if (!group) return;
+    const ids = groupSessionIds(workspace, groupId).filter(id => {
+      const s = workspace.sessions.find(s => s.id === id);
+      return s && s.state !== 'idle';
+    });
+    const changed = applyResizeHint(group, ids, width, height);
+    if (changed) {
+      saveWorkspace(workspace);
+      sendGameUpdate(groupId);
+    }
+  });
+
+  ipcMain.handle(CH.LAYOUT_TOGGLE_AUTO, (_e, { groupId }) => {
+    const group = findGroup(groupId);
+    if (!group) return { error: 'Group not found' };
+    setLayoutManual(group, false);
+    saveWorkspace(workspace);
+    if (isContainerAlive(groupId)) sendGameUpdate(groupId);
+    return { ok: true, layout: { ...group.layout } };
+  });
+
+  ipcMain.handle(CH.LAYOUT_SAVE, (_e, { groupId }) => {
+    const group = findGroup(groupId);
+    if (!group) return { error: 'Group not found' };
+    setLayoutManual(group, true);
+    saveWorkspace(workspace);
+    return { ok: true, layout: { ...group.layout } };
   });
 });
 
