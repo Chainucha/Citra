@@ -1,6 +1,6 @@
 {
-  "name": "citra",
-  "version": "1.0.0",
+  "name": "Phayura",
+  "version": "1.0.1",
   "description": "ToS-compliant window manager for Flyff Universe dual-clienting",
   "main": "src/main/index.js",
   "scripts": {
@@ -12,8 +12,8 @@
     "koffi": "^2.10.0"
   },
   "build": {
-    "appId": "com.citra.app",
-    "productName": "Citra",
+    "appId": "com.Phayura.app",
+    "productName": "Phayura",
     "win": {
       "icon": "assets/icon.ico",
       "target": "nsis"
