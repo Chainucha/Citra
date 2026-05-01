@@ -20,7 +20,7 @@ function esc(str) {
     .replace(/"/g, '&quot;');
 }
 
-window.phayura.onSessionChanged((updated) => {
+window.citra.onSessionChanged((updated) => {
   const idx = workspace.sessions.findIndex(s => s.id === updated.id);
   if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...updated };
   else workspace.sessions.push(updated);
@@ -54,13 +54,13 @@ function renderSidebar() {
   }).join('');
 
   list.querySelectorAll('.btn-focus').forEach(b =>
-    b.addEventListener('click', () => window.phayura.focusSession(b.dataset.id)));
+    b.addEventListener('click', () => window.citra.focusSession(b.dataset.id)));
   list.querySelectorAll('.btn-rename').forEach(b =>
     b.addEventListener('click', () => openRename(b.dataset.id, b.dataset.name)));
   list.querySelectorAll('.btn-mute').forEach(b =>
     b.addEventListener('click', async () => {
       const next = b.dataset.muted !== '1';
-      const r = await window.phayura.setSessionMuted(b.dataset.id, next);
+      const r = await window.citra.setSessionMuted(b.dataset.id, next);
       if (r?.error) { setStatus(r.error, true); return; }
       if (r?.session) {
         const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
@@ -70,7 +70,7 @@ function renderSidebar() {
     }));
   list.querySelectorAll('.btn-move').forEach(b =>
     b.addEventListener('click', async () => {
-      const r = await window.phayura.reorderSession(b.dataset.id, b.dataset.dir);
+      const r = await window.citra.reorderSession(b.dataset.id, b.dataset.dir);
       if (r?.error) { setStatus(r.error, true); return; }
       if (r?.sessions) workspace.sessions = r.sessions;
       renderAll();
@@ -120,7 +120,7 @@ function attachUngroupedHandlers(root) {
         openRename(id, name);
       } else if (action === 'delete') {
         if (!confirm(`Delete session "${name}"? Cookies and storage for this account will be removed on next launch.`)) return;
-        const r = await window.phayura.deleteSession(id);
+        const r = await window.citra.deleteSession(id);
         if (r.error) { setStatus(r.error, true); return; }
         workspace.sessions = workspace.sessions.filter(s => s.id !== id);
         renderAll();
@@ -158,7 +158,7 @@ function initUngroupedDropZone() {
     const sessionId = e.dataTransfer.getData('text/session-id');
     const session = workspace.sessions.find(s => s.id === sessionId);
     if (!session || session.groupId === null) return;
-    const r = await window.phayura.moveSessionToGroup(sessionId, null);
+    const r = await window.citra.moveSessionToGroup(sessionId, null);
     if (r?.error) { setStatus(r.error, true); return; }
     if (r?.session) {
       const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
@@ -226,16 +226,16 @@ function attachGroupHandlers(root) {
       const { action, id, name } = b.dataset;
       if (action === 'launch') {
         setStatus('Launching…');
-        const r = await window.phayura.launchSession(id);
+        const r = await window.citra.launchSession(id);
         setStatus(r.error ? r.error : 'Launched', !!r.error);
       } else if (action === 'close') {
-        await window.phayura.closeSession(id);
+        await window.citra.closeSession(id);
         setStatus('Closed');
       } else if (action === 'rename') {
         openRename(id, name);
       } else if (action === 'mute') {
         const next = b.dataset.muted !== '1';
-        const r = await window.phayura.setSessionMuted(id, next);
+        const r = await window.citra.setSessionMuted(id, next);
         if (r?.error) { setStatus(r.error, true); return; }
         if (r?.session) {
           const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
@@ -244,7 +244,7 @@ function attachGroupHandlers(root) {
         renderAll();
         setStatus(next ? 'Muted' : 'Unmuted');
       } else if (action === 'remove') {
-        const r = await window.phayura.moveSessionToGroup(id, null);
+        const r = await window.citra.moveSessionToGroup(id, null);
         if (r?.error) { setStatus(r.error, true); return; }
         if (r?.session) {
           const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
@@ -254,7 +254,7 @@ function attachGroupHandlers(root) {
         setStatus('Removed from group');
       } else if (action === 'delete') {
         if (!confirm(`Delete session "${name}"? Cookies and storage for this account will be removed on next launch.`)) return;
-        const r = await window.phayura.deleteSession(id);
+        const r = await window.citra.deleteSession(id);
         if (r.error) { setStatus(r.error, true); return; }
         workspace.sessions = workspace.sessions.filter(s => s.id !== id);
         renderAll();
@@ -295,7 +295,7 @@ function attachGroupHandlers(root) {
       const groupId = section.dataset.groupId === '' ? null : section.dataset.groupId;
       const session = workspace.sessions.find(s => s.id === sessionId);
       if (!session || session.groupId === groupId) return;
-      const r = await window.phayura.moveSessionToGroup(sessionId, groupId);
+      const r = await window.citra.moveSessionToGroup(sessionId, groupId);
       if (r?.error) { setStatus(r.error, true); return; }
       if (r?.session) {
         const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
@@ -312,22 +312,22 @@ function attachGroupHandlers(root) {
       const { groupAction, id, name } = b.dataset;
       if (groupAction === 'launch') {
         setStatus('Launching group…');
-        const r = await window.phayura.launchGroup(id);
+        const r = await window.citra.launchGroup(id);
         setStatus(r.error ? r.error : 'Group launched', !!r.error);
       } else if (groupAction === 'close') {
-        await window.phayura.closeGroup(id);
+        await window.citra.closeGroup(id);
         setStatus('Group closed');
       } else if (groupAction === 'toggle-auto') {
         const group = workspace.groups.find(g => g.id === id);
         if (!group) return;
         if (group.layout?.manual) {
-          const r = await window.phayura.toggleAutoLayout(id);
+          const r = await window.citra.toggleAutoLayout(id);
           if (r?.error) { setStatus(r.error, true); return; }
           if (r.layout) group.layout = r.layout;
           renderAll();
           setStatus('Auto layout');
         } else {
-          const r = await window.phayura.saveLayout(id);
+          const r = await window.citra.saveLayout(id);
           if (r?.error) { setStatus(r.error, true); return; }
           if (r.layout) group.layout = r.layout;
           renderAll();
@@ -337,7 +337,7 @@ function attachGroupHandlers(root) {
         openGroupDialog('rename', id, name);
       } else if (groupAction === 'delete') {
         if (!confirm(`Delete group "${name}"? Sessions will be moved to Ungrouped.`)) return;
-        const r = await window.phayura.deleteGroup(id);
+        const r = await window.citra.deleteGroup(id);
         if (r.error) { setStatus(r.error, true); return; }
         if (r.workspace) workspace = r.workspace;
         renderAll();
@@ -364,7 +364,7 @@ function setStatus(msg, isError = false) {
 }
 
 document.getElementById('btn-save').addEventListener('click', async () => {
-  await window.phayura.saveWorkspace({});
+  await window.citra.saveWorkspace({});
   setStatus('Saved');
 });
 
@@ -397,7 +397,7 @@ dlgAdd.addEventListener('close', async () => {
   const name = dlgInput.value.trim();
   if (!name) return;
   const groupId = dlgGroupSel.value === '' ? null : dlgGroupSel.value;
-  const r = await window.phayura.addSession(name, groupId);
+  const r = await window.citra.addSession(name, groupId);
   if (r?.error) { setStatus(r.error, true); return; }
   workspace.sessions.push(r);
   renderAll();
@@ -424,7 +424,7 @@ dlgRename.addEventListener('close', async () => {
   if (!renameSubmit || !renameTargetId) return;
   const name = dlgRenameInput.value.trim();
   if (!name) return;
-  const r = await window.phayura.renameSession(renameTargetId, name);
+  const r = await window.citra.renameSession(renameTargetId, name);
   if (r?.error) { setStatus(r.error, true); return; }
   const idx = workspace.sessions.findIndex(s => s.id === renameTargetId);
   if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...r.session };
@@ -463,13 +463,13 @@ dlgGroup.addEventListener('close', async () => {
   const name = dlgGroupInput.value.trim();
   if (!name) return;
   if (groupDialogMode === 'add') {
-    const r = await window.phayura.addGroup(name);
+    const r = await window.citra.addGroup(name);
     if (r?.error) { setStatus(r.error, true); return; }
     workspace.groups.push(r.group);
     renderAll();
     setStatus('Group added');
   } else if (groupDialogMode === 'rename' && groupDialogId) {
-    const r = await window.phayura.renameGroup(groupDialogId, name);
+    const r = await window.citra.renameGroup(groupDialogId, name);
     if (r?.error) { setStatus(r.error, true); return; }
     const idx = workspace.groups.findIndex(g => g.id === groupDialogId);
     if (idx >= 0) workspace.groups[idx] = { ...workspace.groups[idx], ...r.group };
@@ -489,12 +489,12 @@ function renderHover(enabled) {
 btnHover.addEventListener('click', async () => {
   const next = btnHover.getAttribute('aria-pressed') !== 'true';
   renderHover(next);
-  await window.phayura.setHoverFocus(next, 120);
+  await window.citra.setHoverFocus(next, 120);
   setStatus(next ? 'Hover focus on' : 'Hover focus off');
 });
 
 async function init() {
-  workspace = await window.phayura.getWorkspace();
+  workspace = await window.citra.getWorkspace();
   workspace.sessions = workspace.sessions || [];
   workspace.groups   = workspace.groups   || [];
   hoverDelayMs = workspace.hoverFocusDelayMs ?? 0;

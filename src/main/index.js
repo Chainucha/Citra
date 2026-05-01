@@ -23,7 +23,7 @@ const { focusWindow } = require('./win32/windowOps');
 const hoverFocus = require('./hoverFocus');
 const { computeAutoGrid, uniformRatios, fillCellMap } = require('../shared/gridLayoutEngine');
 
-// Single instance — two Phayuras would fight over hotkeys
+// Single instance — two Citras would fight over hotkeys
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 // ── Performance switches (must run before app.whenReady) ──

@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const CH = require('../shared/ipc-channels');
 
-contextBridge.exposeInMainWorld('phayura', {
+contextBridge.exposeInMainWorld('citra', {
   getWorkspace:    ()       => ipcRenderer.invoke(CH.GET_WORKSPACE),
   launchSession:   (id)     => ipcRenderer.invoke(CH.LAUNCH_SESSION, { id }),
   closeSession:    (id)     => ipcRenderer.invoke(CH.CLOSE_SESSION,  { id }),
