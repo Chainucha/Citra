@@ -1,23 +1,15 @@
 let workspace = { sessions: [], groups: [] };
 let statusTimer = null;
 
-const PRESET_INFO = {
-  'split-h-50': { dir: 'row',    ratio: 0.5, label: '50 / 50' },
-  'split-h-70': { dir: 'row',    ratio: 0.7, label: '70 / 30' },
-  'split-h-30': { dir: 'row',    ratio: 0.3, label: '30 / 70' },
-  'split-v-50': { dir: 'column', ratio: 0.5, label: '50 / 50' },
-  'split-v-70': { dir: 'column', ratio: 0.7, label: '70 / 30' },
-  'split-v-30': { dir: 'column', ratio: 0.3, label: '30 / 70' },
-};
+function describeLayout(group) {
+  const L = group.layout || { cols: 0, rows: 0, manual: false };
+  const n = countSessionsInGroup(group);
+  const tag = L.manual ? 'Locked' : 'Auto';
+  return `${tag} · ${L.cols || 0}×${L.rows || 0} (${n} pane${n === 1 ? '' : 's'})`;
+}
 
-function ratioLabel(group) {
-  const info = PRESET_INFO[group.activePreset] || PRESET_INFO['split-h-50'];
-  const ratio = group.splitRatio ?? info.ratio;
-  const a = Math.round(ratio * 100);
-  const b = 100 - a;
-  const dir = info.dir === 'row' ? 'H' : 'V';
-  const tag = group.splitRatio != null ? ' · custom' : '';
-  return `${a} / ${b} ${dir}${tag}`;
+function countSessionsInGroup(group) {
+  return workspace.sessions.filter(s => s.groupId === group.id).length;
 }
 
 function esc(str) {
@@ -28,7 +20,7 @@ function esc(str) {
     .replace(/"/g, '&quot;');
 }
 
-window.sunkist.onSessionChanged((updated) => {
+window.citra.onSessionChanged((updated) => {
   const idx = workspace.sessions.findIndex(s => s.id === updated.id);
   if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...updated };
   else workspace.sessions.push(updated);
@@ -37,6 +29,7 @@ window.sunkist.onSessionChanged((updated) => {
 
 function renderAll() {
   renderSidebar();
+  renderUngrouped();
   renderGroups();
 }
 
@@ -46,25 +39,38 @@ function renderSidebar() {
   const last = sessions.length - 1;
   list.innerHTML = sessions.map((s, i) => {
     const group = workspace.groups.find(g => g.id === s.groupId);
+    const groupLabel = group?.name || 'ungrouped';
     return `
     <li draggable="true" data-id="${s.id}" data-state="${esc(s.state)}">
       <span class="dot" style="background:${esc(s.accentColor)}"></span>
-      <span class="session-name" title="${esc(s.name)} — ${esc(group?.name || '')}">${esc(s.name)}</span>
+      <span class="session-name" title="${esc(s.name)} — ${esc(groupLabel)}">${esc(s.name)}</span>
       <span class="session-state ${esc(s.state)}">${esc(s.state)}</span>
       <button class="btn-move" data-id="${s.id}" data-dir="up" title="Move up" ${i === 0 ? 'disabled' : ''}>&#9650;</button>
       <button class="btn-move" data-id="${s.id}" data-dir="down" title="Move down" ${i === last ? 'disabled' : ''}>&#9660;</button>
+      <button class="btn-mute ${s.muted ? 'muted' : ''}" data-id="${s.id}" data-muted="${s.muted ? '1' : '0'}" title="${s.muted ? 'Unmute' : 'Mute'}">${s.muted ? '&#128263;' : '&#128266;'}</button>
       <button class="btn-rename" data-id="${s.id}" data-name="${esc(s.name)}" title="Rename">&#9998;</button>
       ${s.hwnd ? `<button class="btn-focus" data-id="${s.id}">&#9654;</button>` : ''}
     </li>`;
   }).join('');
 
   list.querySelectorAll('.btn-focus').forEach(b =>
-    b.addEventListener('click', () => window.sunkist.focusSession(b.dataset.id)));
+    b.addEventListener('click', () => window.citra.focusSession(b.dataset.id)));
   list.querySelectorAll('.btn-rename').forEach(b =>
     b.addEventListener('click', () => openRename(b.dataset.id, b.dataset.name)));
+  list.querySelectorAll('.btn-mute').forEach(b =>
+    b.addEventListener('click', async () => {
+      const next = b.dataset.muted !== '1';
+      const r = await window.citra.setSessionMuted(b.dataset.id, next);
+      if (r?.error) { setStatus(r.error, true); return; }
+      if (r?.session) {
+        const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
+        if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...r.session };
+      }
+      renderAll();
+    }));
   list.querySelectorAll('.btn-move').forEach(b =>
     b.addEventListener('click', async () => {
-      const r = await window.sunkist.reorderSession(b.dataset.id, b.dataset.dir);
+      const r = await window.citra.reorderSession(b.dataset.id, b.dataset.dir);
       if (r?.error) { setStatus(r.error, true); return; }
       if (r?.sessions) workspace.sessions = r.sessions;
       renderAll();
@@ -89,16 +95,84 @@ function renderGroups() {
   attachGroupHandlers(root);
 }
 
+function renderUngrouped() {
+  const root = document.getElementById('ungrouped-list');
+  const sessions = workspace.sessions.filter(s => !s.groupId);
+  document.getElementById('ungrouped-count').textContent = sessions.length;
+  root.innerHTML = sessions.length === 0
+    ? `<div class="empty-group">Drop a session here to ungroup.</div>`
+    : sessions.map(s => `
+        <div class="ungrouped-item" draggable="true" data-id="${s.id}" data-state="${esc(s.state)}">
+          <span class="dot" style="background:${esc(s.accentColor)}"></span>
+          <span class="ungrouped-name" title="${esc(s.name)}">${esc(s.name)}</span>
+          <button class="btn-rename" data-action="rename" data-id="${s.id}" data-name="${esc(s.name)}" title="Rename">&#9998;</button>
+          <button class="btn-rename danger" data-action="delete" data-id="${s.id}" data-name="${esc(s.name)}" title="Delete">&#10005;</button>
+        </div>`).join('');
+
+  attachUngroupedHandlers(root);
+}
+
+function attachUngroupedHandlers(root) {
+  root.querySelectorAll('button[data-action]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const { action, id, name } = b.dataset;
+      if (action === 'rename') {
+        openRename(id, name);
+      } else if (action === 'delete') {
+        if (!confirm(`Delete session "${name}"? Cookies and storage for this account will be removed on next launch.`)) return;
+        const r = await window.citra.deleteSession(id);
+        if (r.error) { setStatus(r.error, true); return; }
+        workspace.sessions = workspace.sessions.filter(s => s.id !== id);
+        renderAll();
+        setStatus('Deleted');
+      }
+    });
+  });
+
+  root.querySelectorAll('.ungrouped-item').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      if (item.dataset.state !== 'idle') { e.preventDefault(); return; }
+      e.dataTransfer.setData('text/session-id', item.dataset.id);
+      e.dataTransfer.effectAllowed = 'move';
+      item.classList.add('dragging');
+    });
+    item.addEventListener('dragend', () => item.classList.remove('dragging'));
+  });
+}
+
+function initUngroupedDropZone() {
+  const details = document.getElementById('ungrouped-details');
+  const root = document.getElementById('ungrouped-list');
+  details.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    details.classList.add('drag-over');
+    if (!details.open) details.open = true;
+  });
+  details.addEventListener('dragleave', e => {
+    if (!details.contains(e.relatedTarget)) details.classList.remove('drag-over');
+  });
+  details.addEventListener('drop', async e => {
+    e.preventDefault();
+    details.classList.remove('drag-over');
+    const sessionId = e.dataTransfer.getData('text/session-id');
+    const session = workspace.sessions.find(s => s.id === sessionId);
+    if (!session || session.groupId === null) return;
+    const r = await window.citra.moveSessionToGroup(sessionId, null);
+    if (r?.error) { setStatus(r.error, true); return; }
+    if (r?.session) {
+      const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
+      if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...r.session };
+    }
+    renderAll();
+    setStatus('Ungrouped');
+  });
+}
+
 function renderGroupSection(group) {
   const sessions = workspace.sessions.filter(s => s.groupId === group.id);
   const anyActive = sessions.some(s => s.state !== 'idle');
   const idleCount = sessions.filter(s => s.state === 'idle').length;
-
-  const presetOpt = (preset) => {
-    const info = PRESET_INFO[preset];
-    const sel  = group.activePreset === preset ? 'selected' : '';
-    return `<option value="${preset}" ${sel}>${info.label}</option>`;
-  };
 
   const cards = sessions.length === 0
     ? `<div class="empty-group">No sessions in this group. Use "+ Add Session" to add one.</div>`
@@ -110,11 +184,12 @@ function renderGroupSection(group) {
               <span class="card-state ${esc(s.state)}">${esc(s.state)}</span>
             </div>
             <div class="card-actions">
-              <button class="card-btn" data-action="rename" data-id="${s.id}" data-name="${esc(s.name)}">Rename</button>
               ${s.state === 'idle'
                 ? `<button class="card-btn" data-action="launch" data-id="${s.id}">Launch</button>
-                   <button class="card-btn danger" data-action="delete" data-id="${s.id}" data-name="${esc(s.name)}">Delete</button>`
-                : `<button class="card-btn danger" data-action="close" data-id="${s.id}">Close</button>`}
+                   <button class="card-btn" data-action="mute" data-id="${s.id}" data-muted="${s.muted ? '1' : '0'}">${s.muted ? '🔇 Unmute' : '🔊 Mute'}</button>
+                   <button class="card-btn danger" data-action="remove" data-id="${s.id}" data-name="${esc(s.name)}">Remove</button>`
+                : `<button class="card-btn" data-action="mute" data-id="${s.id}" data-muted="${s.muted ? '1' : '0'}">${s.muted ? '🔇 Unmute' : '🔊 Mute'}</button>
+                   <button class="card-btn danger" data-action="close" data-id="${s.id}">Close</button>`}
             </div>
           </div>`).join('');
 
@@ -136,22 +211,9 @@ function renderGroupSection(group) {
 
       <div class="group-toolbar">
         <span class="section-label inline">LAYOUT</span>
-        <select class="preset-select" data-group="${group.id}">
-          <optgroup label="Horizontal">
-            ${presetOpt('split-h-50')}
-            ${presetOpt('split-h-70')}
-            ${presetOpt('split-h-30')}
-          </optgroup>
-          <optgroup label="Vertical">
-            ${presetOpt('split-v-50')}
-            ${presetOpt('split-v-70')}
-            ${presetOpt('split-v-30')}
-          </optgroup>
-        </select>
-        <span class="ratio-display">${esc(ratioLabel(group))}</span>
-        <button class="btn-primary apply-btn" data-group-action="apply" data-id="${group.id}" ${!anyActive ? 'disabled' : ''}>Apply</button>
-        <button class="btn-toggle ${group.lockLayout ? 'locked' : ''}" data-group-action="lock" data-id="${group.id}" aria-pressed="${group.lockLayout}">
-          ${group.lockLayout ? '🔒 Locked' : '🔓 Unlocked'}
+        <span class="layout-display">${esc(describeLayout(group))}</span>
+        <button class="btn-toggle ${group.layout?.manual ? 'locked' : 'on'}" data-group-action="toggle-auto" data-id="${group.id}">
+          ${group.layout?.manual ? '🔒 Locked — Reset to Auto' : '✓ Auto Layout'}
         </button>
       </div>
     </section>`;
@@ -164,16 +226,35 @@ function attachGroupHandlers(root) {
       const { action, id, name } = b.dataset;
       if (action === 'launch') {
         setStatus('Launching…');
-        const r = await window.sunkist.launchSession(id);
+        const r = await window.citra.launchSession(id);
         setStatus(r.error ? r.error : 'Launched', !!r.error);
       } else if (action === 'close') {
-        await window.sunkist.closeSession(id);
+        await window.citra.closeSession(id);
         setStatus('Closed');
       } else if (action === 'rename') {
         openRename(id, name);
+      } else if (action === 'mute') {
+        const next = b.dataset.muted !== '1';
+        const r = await window.citra.setSessionMuted(id, next);
+        if (r?.error) { setStatus(r.error, true); return; }
+        if (r?.session) {
+          const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
+          if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...r.session };
+        }
+        renderAll();
+        setStatus(next ? 'Muted' : 'Unmuted');
+      } else if (action === 'remove') {
+        const r = await window.citra.moveSessionToGroup(id, null);
+        if (r?.error) { setStatus(r.error, true); return; }
+        if (r?.session) {
+          const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
+          if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...r.session };
+        }
+        renderAll();
+        setStatus('Removed from group');
       } else if (action === 'delete') {
         if (!confirm(`Delete session "${name}"? Cookies and storage for this account will be removed on next launch.`)) return;
-        const r = await window.sunkist.deleteSession(id);
+        const r = await window.citra.deleteSession(id);
         if (r.error) { setStatus(r.error, true); return; }
         workspace.sessions = workspace.sessions.filter(s => s.id !== id);
         renderAll();
@@ -211,10 +292,10 @@ function attachGroupHandlers(root) {
       e.preventDefault();
       section.classList.remove('drag-over');
       const sessionId = e.dataTransfer.getData('text/session-id');
-      const groupId = section.dataset.groupId;
+      const groupId = section.dataset.groupId === '' ? null : section.dataset.groupId;
       const session = workspace.sessions.find(s => s.id === sessionId);
       if (!session || session.groupId === groupId) return;
-      const r = await window.sunkist.moveSessionToGroup(sessionId, groupId);
+      const r = await window.citra.moveSessionToGroup(sessionId, groupId);
       if (r?.error) { setStatus(r.error, true); return; }
       if (r?.session) {
         const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
@@ -225,55 +306,45 @@ function attachGroupHandlers(root) {
     });
   });
 
-  // Preset selection (per group) — picking a new preset clears any custom
-  // saved splitRatio so the chosen preset's default ratio applies cleanly.
-  root.querySelectorAll('.preset-select').forEach(sel => {
-    sel.addEventListener('change', async () => {
-      const groupId = sel.dataset.group;
-      const preset  = sel.value;
-      const group   = workspace.groups.find(g => g.id === groupId);
-      if (group) { group.activePreset = preset; delete group.splitRatio; }
-      await window.sunkist.updateGroup(groupId, { activePreset: preset, splitRatio: null });
-      renderAll();
-    });
-  });
-
   // Group action buttons
   root.querySelectorAll('[data-group-action]').forEach(b => {
     b.addEventListener('click', async () => {
       const { groupAction, id, name } = b.dataset;
       if (groupAction === 'launch') {
         setStatus('Launching group…');
-        const r = await window.sunkist.launchGroup(id);
+        const r = await window.citra.launchGroup(id);
         setStatus(r.error ? r.error : 'Group launched', !!r.error);
       } else if (groupAction === 'close') {
-        await window.sunkist.closeGroup(id);
+        await window.citra.closeGroup(id);
         setStatus('Group closed');
-      } else if (groupAction === 'apply') {
-        const group = workspace.groups.find(g => g.id === id);
-        const r = await window.sunkist.applyLayout(id, group?.activePreset);
-        setStatus(r.error || 'Layout applied', !!r.error);
-      } else if (groupAction === 'lock') {
+      } else if (groupAction === 'toggle-auto') {
         const group = workspace.groups.find(g => g.id === id);
         if (!group) return;
-        const next = !group.lockLayout;
-        group.lockLayout = next;
-        await window.sunkist.updateGroup(id, { lockLayout: next });
-        renderAll();
-        setStatus(next ? 'Layout locked' : 'Layout unlocked');
+        if (group.layout?.manual) {
+          const r = await window.citra.toggleAutoLayout(id);
+          if (r?.error) { setStatus(r.error, true); return; }
+          if (r.layout) group.layout = r.layout;
+          renderAll();
+          setStatus('Auto layout');
+        } else {
+          const r = await window.citra.saveLayout(id);
+          if (r?.error) { setStatus(r.error, true); return; }
+          if (r.layout) group.layout = r.layout;
+          renderAll();
+          setStatus('Layout locked');
+        }
       } else if (groupAction === 'rename') {
         openGroupDialog('rename', id, name);
       } else if (groupAction === 'delete') {
-        if (!confirm(`Delete group "${name}"? Sessions will be moved to another group.`)) return;
-        const r = await window.sunkist.deleteGroup(id);
+        if (!confirm(`Delete group "${name}"? Sessions will be moved to Ungrouped.`)) return;
+        const r = await window.citra.deleteGroup(id);
         if (r.error) { setStatus(r.error, true); return; }
         if (r.workspace) workspace = r.workspace;
         renderAll();
         setStatus('Group deleted');
       } else if (groupAction === 'add-session') {
         dlgInput.value = `Account ${workspace.sessions.length + 1}`;
-        dlgGroupSel.innerHTML = workspace.groups.map(g =>
-          `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+        dlgGroupSel.innerHTML = buildGroupOptions();
         dlgGroupSel.value = id;
         dlgGroupSel.disabled = true;
         addSubmit = false;
@@ -293,7 +364,7 @@ function setStatus(msg, isError = false) {
 }
 
 document.getElementById('btn-save').addEventListener('click', async () => {
-  await window.sunkist.saveWorkspace({});
+  await window.citra.saveWorkspace({});
   setStatus('Saved');
 });
 
@@ -303,10 +374,15 @@ const dlgInput    = document.getElementById('dlg-add-input');
 const dlgGroupSel = document.getElementById('dlg-add-group');
 let addSubmit = false;
 
+function buildGroupOptions() {
+  const groupOpts = workspace.groups.map(g =>
+    `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+  return groupOpts + `<option value="">(Ungrouped)</option>`;
+}
+
 document.getElementById('btn-add').addEventListener('click', () => {
   dlgInput.value = `Account ${workspace.sessions.length + 1}`;
-  dlgGroupSel.innerHTML = workspace.groups.map(g =>
-    `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+  dlgGroupSel.innerHTML = buildGroupOptions();
   addSubmit = false;
   dlgAdd.showModal();
   dlgInput.select();
@@ -320,7 +396,8 @@ dlgAdd.addEventListener('close', async () => {
   if (!addSubmit) return;
   const name = dlgInput.value.trim();
   if (!name) return;
-  const r = await window.sunkist.addSession(name, dlgGroupSel.value);
+  const groupId = dlgGroupSel.value === '' ? null : dlgGroupSel.value;
+  const r = await window.citra.addSession(name, groupId);
   if (r?.error) { setStatus(r.error, true); return; }
   workspace.sessions.push(r);
   renderAll();
@@ -347,7 +424,7 @@ dlgRename.addEventListener('close', async () => {
   if (!renameSubmit || !renameTargetId) return;
   const name = dlgRenameInput.value.trim();
   if (!name) return;
-  const r = await window.sunkist.renameSession(renameTargetId, name);
+  const r = await window.citra.renameSession(renameTargetId, name);
   if (r?.error) { setStatus(r.error, true); return; }
   const idx = workspace.sessions.findIndex(s => s.id === renameTargetId);
   if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...r.session };
@@ -386,13 +463,13 @@ dlgGroup.addEventListener('close', async () => {
   const name = dlgGroupInput.value.trim();
   if (!name) return;
   if (groupDialogMode === 'add') {
-    const r = await window.sunkist.addGroup(name);
+    const r = await window.citra.addGroup(name);
     if (r?.error) { setStatus(r.error, true); return; }
     workspace.groups.push(r.group);
     renderAll();
     setStatus('Group added');
   } else if (groupDialogMode === 'rename' && groupDialogId) {
-    const r = await window.sunkist.renameGroup(groupDialogId, name);
+    const r = await window.citra.renameGroup(groupDialogId, name);
     if (r?.error) { setStatus(r.error, true); return; }
     const idx = workspace.groups.findIndex(g => g.id === groupDialogId);
     if (idx >= 0) workspace.groups[idx] = { ...workspace.groups[idx], ...r.group };
@@ -412,31 +489,17 @@ function renderHover(enabled) {
 btnHover.addEventListener('click', async () => {
   const next = btnHover.getAttribute('aria-pressed') !== 'true';
   renderHover(next);
-  await window.sunkist.setHoverFocus(next, 120);
+  await window.citra.setHoverFocus(next, 120);
   setStatus(next ? 'Hover focus on' : 'Hover focus off');
 });
 
-window.sunkist.onRatioChanged(({ groupId, ratio }) => {
-  // Update display inline — no full rerender needed
-  const section = document.querySelector(`.group-section[data-group-id="${groupId}"]`);
-  if (!section) return;
-  const display = section.querySelector('.ratio-display');
-  if (!display) return;
-  const group = workspace.groups.find(g => g.id === groupId);
-  if (!group) return;
-  const info = PRESET_INFO[group.activePreset] || PRESET_INFO['split-h-50'];
-  const a = Math.round(ratio * 100);
-  const b = 100 - a;
-  const dir = info.dir === 'row' ? 'H' : 'V';
-  display.textContent = `${a} / ${b} ${dir} · live`;
-});
-
 async function init() {
-  workspace = await window.sunkist.getWorkspace();
+  workspace = await window.citra.getWorkspace();
   workspace.sessions = workspace.sessions || [];
   workspace.groups   = workspace.groups   || [];
   hoverDelayMs = workspace.hoverFocusDelayMs ?? 0;
   renderHover(!!workspace.hoverFocusEnabled);
+  initUngroupedDropZone();
   renderAll();
 }
 

@@ -1,64 +1,46 @@
-const PRESETS = {
-  'split-h-50': { dir: 'row',    ratio: 0.5 },
-  'split-h-70': { dir: 'row',    ratio: 0.7 },
-  'split-h-30': { dir: 'row',    ratio: 0.3 },
-  'split-v-50': { dir: 'column', ratio: 0.5 },
-  'split-v-70': { dir: 'column', ratio: 0.7 },
-  'split-v-30': { dir: 'column', ratio: 0.3 },
-};
-
-const wrappers = new Map(); // sessionId → wrapper div (webview lives inside)
-let dividerEl  = null;
-let splitRatio = 0.5;
-let splitDir   = 'row';
-let lastIds    = '';
-let locked     = false;
-let initialized = false;
+const wrappers  = new Map();
+let dividers    = [];
+let layoutState = null;
+let sessionsById = new Map();
 let hoverEnabled = false;
-// Small delay filters transient cursor passes (e.g. crossing pane on the way
-// to title bar / window controls) so hover-focus doesn't trap the user inside
-// the webview when they're trying to interact with chrome.
 let hoverDelayMs = 120;
 let hoverTimer   = null;
+let isDragging   = false;
+let zoomedSessionId = null;
+let editModeActive = false;
+let saveLayoutPending = false;
 
-window.gameBridge.onUpdate(({ sessions, preset, lockLayout, applyRatio, savedRatio, hoverFocusEnabled, hoverFocusDelayMs }) => {
-  const cfg        = PRESETS[preset] || { dir: 'row', ratio: 0.5 };
-  const newIds     = sessions.map(s => s.id).join(',');
-  const dirChanged = cfg.dir !== splitDir;
-  const idsChanged = newIds !== lastIds;
-  const lockChanged = !!lockLayout !== locked;
+const containerEl = () => document.getElementById('container');
+const overlayEl   = () => document.getElementById('drag-overlay');
 
-  if (applyRatio || dirChanged || !initialized) {
-    splitRatio = savedRatio ?? cfg.ratio;
-    splitDir   = cfg.dir;
-    initialized = true;
-  }
-  hideSaveRatioBtn();
-  locked  = !!lockLayout;
-  lastIds = newIds;
+window.gameBridge.onUpdate(({ sessions, layout, hoverFocusEnabled, hoverFocusDelayMs }) => {
   hoverEnabled = !!hoverFocusEnabled;
   hoverDelayMs = hoverFocusDelayMs ?? 120;
 
-  const container = document.getElementById('container');
-  const overlay   = document.getElementById('drag-overlay');
-  const active    = sessions.slice(0, 2);
+  sessionsById = new Map(sessions.map(s => [s.id, s]));
+  layoutState = layout;
 
-  if (idsChanged) {
-    // Session set changed — reconcile in-place (preserve existing webviews)
-    reconcile(active, container, overlay);
-  } else if (dirChanged) {
-    // Only direction changed — update CSS in-place, recreate divider only
-    updateDirection(container, overlay);
-  } else if (applyRatio) {
-    // Only ratio changed — update flex values, no DOM mutation
-    updateRatio();
-  } else if (lockChanged && dividerEl) {
-    applyLockState();
-  }
-
-  // Sync label name + dot color (rename/recolor must not reload webview)
-  active.forEach(s => syncLabel(s));
+  reconcile();
+  sessions.forEach(syncLabel);
+  sessions.forEach(s => applyMute(s.id, !!s.muted));
 });
+
+window.gameBridge.onSetMuted(({ id, muted }) => {
+  const s = sessionsById.get(id);
+  if (s) s.muted = !!muted;
+  applyMute(id, !!muted);
+});
+
+function applyMute(sessionId, muted) {
+  const wrap = wrappers.get(sessionId);
+  const wv = wrap?.querySelector('webview');
+  if (!wv) return;
+  const set = () => { try { wv.setAudioMuted(muted); } catch {} };
+  if (wv.getWebContentsId) {
+    try { wv.getWebContentsId(); set(); return; } catch {}
+  }
+  wv.addEventListener('dom-ready', set, { once: true });
+}
 
 window.gameBridge.onFocusWebview(({ id }) => {
   const wrap = wrappers.get(id);
@@ -70,95 +52,174 @@ window.gameBridge.onFocusWebview(({ id }) => {
 
 window.gameBridge.ready();
 
-// ── Reconcile ────────────────────────────────────────────────────────────────
-// Preserve existing wrappers across updates — removing a webview from DOM
-// destroys its webContents, so we only add/remove the diff and never re-append
-// surviving nodes.
+function reconcile() {
+  const c = containerEl();
+  if (!layoutState) return;
 
-function reconcile(sessions, container, overlay) {
-  const incomingIds = new Set(sessions.map(s => s.id));
+  c.style.gridTemplateColumns = (layoutState.colRatios.length > 0
+    ? layoutState.colRatios.map(v => `${v}fr`).join(' ')
+    : '1fr');
+  c.style.gridTemplateRows = (layoutState.rowRatios.length > 0
+    ? layoutState.rowRatios.map(v => `${v}fr`).join(' ')
+    : '1fr');
 
-  // Drop wrappers no longer present
+  const idToCell = new Map();
+  for (const k of Object.keys(layoutState.cellMap)) {
+    idToCell.set(layoutState.cellMap[k], k);
+  }
+
   for (const [id, wrap] of [...wrappers]) {
-    if (!incomingIds.has(id)) {
+    if (!idToCell.has(id) || !sessionsById.has(id)) {
       wrap.remove();
       wrappers.delete(id);
     }
   }
 
-  // Detach old divider — recreated below if 2 panes
-  if (dividerEl) { dividerEl.remove(); dividerEl = null; }
-
-  container.style.flexDirection = splitDir;
-
-  // Append new wrappers; existing wrappers stay where they are
-  sessions.forEach(s => {
-    if (!wrappers.has(s.id)) {
-      const w = createWrapper(s);
-      wrappers.set(s.id, w);
-      container.appendChild(w);
+  for (const [id, key] of idToCell) {
+    if (!wrappers.has(id)) {
+      const session = sessionsById.get(id);
+      if (!session) continue;
+      const wrap = createWrapper(session);
+      wrappers.set(id, wrap);
+      c.appendChild(wrap);
     }
+  }
+
+  for (const [id, wrap] of wrappers) {
+    const key = idToCell.get(id);
+    if (!key) continue;
+    const [r, col] = key.split(',').map(n => parseInt(n, 10));
+    wrap.style.gridArea = `${r + 1} / ${col + 1} / ${r + 2} / ${col + 2}`;
+    wrap.dataset.cell = key;
+    wrap.classList.toggle('edit-mode', editModeActive);
+  }
+
+  rebuildDividers(c);
+  applyZoomState();
+}
+
+function rebuildDividers(c) {
+  for (const d of dividers) d.el.remove();
+  dividers = [];
+
+  const { cols, rows } = layoutState;
+  for (let i = 0; i < cols - 1; i++) {
+    const el = document.createElement('div');
+    el.className = 'divider col-divider';
+    el.style.gridArea = `1 / ${i + 1} / -1 / ${i + 2}`;
+    el.style.justifySelf = 'end';
+    attachColDividerDrag(el, i);
+    c.appendChild(el);
+    dividers.push({ el, kind: 'col', index: i });
+  }
+  for (let i = 0; i < rows - 1; i++) {
+    const el = document.createElement('div');
+    el.className = 'divider row-divider';
+    el.style.gridArea = `${i + 1} / 1 / ${i + 2} / -1`;
+    el.style.alignSelf = 'end';
+    attachRowDividerDrag(el, i);
+    c.appendChild(el);
+    dividers.push({ el, kind: 'row', index: i });
+  }
+}
+
+function lockWebviews() {
+  for (const w of wrappers.values()) {
+    const wv = w.querySelector('webview');
+    if (wv) wv.style.pointerEvents = 'none';
+  }
+}
+
+function unlockWebviews() {
+  for (const w of wrappers.values()) {
+    const wv = w.querySelector('webview');
+    if (wv) wv.style.pointerEvents = '';
+  }
+}
+
+function attachColDividerDrag(el, index) {
+  el.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const c = containerEl();
+    const overlay = overlayEl();
+    overlay.style.cursor = 'col-resize';
+    overlay.classList.add('active');
+    el.classList.add('dragging');
+    lockWebviews();
+
+    const startX = e.clientX;
+    const ratios = layoutState.colRatios.slice();
+    const totalW = c.clientWidth;
+    const startA = ratios[index];
+    const startB = ratios[index + 1];
+    const pairSum = startA + startB;
+
+    const onMove = ev => {
+      const delta = (ev.clientX - startX) / totalW;
+      const a = Math.max(0.05, Math.min(pairSum - 0.05, startA + delta));
+      ratios[index] = a;
+      ratios[index + 1] = pairSum - a;
+      layoutState.colRatios = ratios;
+      c.style.gridTemplateColumns = ratios.map(v => `${v}fr`).join(' ');
+    };
+
+    const onUp = async () => {
+      overlay.classList.remove('active');
+      el.classList.remove('dragging');
+      unlockWebviews();
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      await window.gameBridge.updateRatios(layoutState.colRatios, layoutState.rowRatios);
+      saveLayoutPending = true;
+      refreshSaveLayoutVisibility();
+      showToast('Layout updated');
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   });
-
-  if (sessions.length === 0) return;
-
-  const views = sessions.map(s => wrappers.get(s.id));
-  setDirStyles(views);
-
-  if (views.length === 1) {
-    views[0].style.flex  = '1';
-    views[0].style.order = '';
-    return;
-  }
-
-  views[0].style.flex  = String(splitRatio);
-  views[1].style.flex  = String(1 - splitRatio);
-  views[0].style.order = '0';
-  views[1].style.order = '2';
-  dividerEl = createDivider(views[0], views[1], container, overlay);
-  dividerEl.style.order = '1';
-  container.appendChild(dividerEl);
 }
 
-// ── In-place updates (no webview reload) ─────────────────────────────────────
+function attachRowDividerDrag(el, index) {
+  el.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const c = containerEl();
+    const overlay = overlayEl();
+    overlay.style.cursor = 'row-resize';
+    overlay.classList.add('active');
+    el.classList.add('dragging');
+    lockWebviews();
 
-function updateDirection(container, overlay) {
-  container.style.flexDirection = splitDir;
-  const views = [...wrappers.values()];
-  setDirStyles(views);
+    const startY = e.clientY;
+    const ratios = layoutState.rowRatios.slice();
+    const totalH = c.clientHeight;
+    const startA = ratios[index];
+    const startB = ratios[index + 1];
+    const pairSum = startA + startB;
 
-  if (views.length === 2) {
-    // Visual order may differ from DOM order — driven by CSS order in reconcile.
-    // Look up by visual order so drag math + flex assignment stay consistent.
-    const ordered = [...wrappers.values()].sort((a, b) =>
-      (parseInt(a.style.order || '0', 10)) - (parseInt(b.style.order || '0', 10))
-    );
-    ordered[0].style.flex = String(splitRatio);
-    ordered[1].style.flex = String(1 - splitRatio);
+    const onMove = ev => {
+      const delta = (ev.clientY - startY) / totalH;
+      const a = Math.max(0.05, Math.min(pairSum - 0.05, startA + delta));
+      ratios[index] = a;
+      ratios[index + 1] = pairSum - a;
+      layoutState.rowRatios = ratios;
+      c.style.gridTemplateRows = ratios.map(v => `${v}fr`).join(' ');
+    };
 
-    // Recreate divider only (drag closure captures isRow — must be fresh)
-    if (dividerEl) {
-      dividerEl.remove();
-      dividerEl = createDivider(ordered[0], ordered[1], container, overlay);
-      dividerEl.style.order = '1';
-      container.appendChild(dividerEl);
-    }
-  }
-}
+    const onUp = async () => {
+      overlay.classList.remove('active');
+      el.classList.remove('dragging');
+      unlockWebviews();
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      await window.gameBridge.updateRatios(layoutState.colRatios, layoutState.rowRatios);
+      saveLayoutPending = true;
+      refreshSaveLayoutVisibility();
+      showToast('Layout updated');
+    };
 
-function updateRatio() {
-  const views = [...wrappers.values()];
-  if (views.length < 2) return;
-  views[0].style.flex = String(splitRatio);
-  views[1].style.flex = String(1 - splitRatio);
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function setDirStyles(views) {
-  views.forEach(v => {
-    if (splitDir === 'row') { v.style.height = '100%'; v.style.width  = ''; }
-    else                    { v.style.width  = '100%'; v.style.height = ''; }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   });
 }
 
@@ -171,8 +232,17 @@ function createWrapper(session) {
   wv.setAttribute('partition', `persist:${session.id}`);
   wv.setAttribute('src', session.url || 'https://universe.flyff.com/play');
   wv.setAttribute('tabindex', '0');
-  // Keep WebGL/timers running when pane unfocused (matches host BrowserWindow setting)
   wv.setAttribute('webpreferences', 'backgroundThrottling=false');
+
+  const hideScrollbarsCSS = `
+    html, body { overflow: hidden !important; scrollbar-width: none !important; -ms-overflow-style: none !important; }
+    *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+  `;
+  const injectCSS = () => { try { wv.insertCSS(hideScrollbarsCSS); } catch {} };
+  wv.addEventListener('dom-ready', injectCSS);
+  wv.addEventListener('did-navigate',          injectCSS);
+  wv.addEventListener('did-navigate-in-page',  injectCSS);
+  wv.addEventListener('did-frame-finish-load', injectCSS);
 
   const label = document.createElement('div');
   label.className = 'session-label';
@@ -190,50 +260,55 @@ function createWrapper(session) {
 
   const menu = document.createElement('div');
   menu.className = 'session-menu hidden';
+
   const itemDash = document.createElement('button');
   itemDash.textContent = 'Open Manage Panel';
   itemDash.addEventListener('click', () => {
     window.gameBridge.openDashboard();
-    menu.classList.add('hidden');
-    btnMenu.classList.remove('open');
+    closeMenu();
   });
 
   const itemSave = document.createElement('button');
   itemSave.className = 'save-layout-item hidden';
   itemSave.textContent = 'Save Layout';
-  if (saveRatioPending) itemSave.classList.remove('hidden');
+  if (saveLayoutPending) itemSave.classList.remove('hidden');
   itemSave.addEventListener('click', async () => {
-    await window.gameBridge.saveLayoutRatio(splitRatio);
-    menu.classList.add('hidden');
-    btnMenu.classList.remove('open');
-    setSaveRatioPending(false);
+    closeMenu();
+    await window.gameBridge.saveLayout();
+    saveLayoutPending = false;
+    refreshSaveLayoutVisibility();
     showToast('Layout saved');
   });
 
-  menu.append(itemDash, itemSave);
+  const itemEdit = document.createElement('button');
+  itemEdit.className = 'edit-position-item';
+  itemEdit.textContent = editModeActive ? 'Lock Positions' : 'Edit Positions';
+  itemEdit.addEventListener('click', () => {
+    closeMenu();
+    toggleEditMode();
+  });
 
-  btnMenu.addEventListener('click', (e) => {
+  menu.append(itemDash, itemSave, itemEdit);
+
+  btnMenu.addEventListener('click', e => {
     e.stopPropagation();
     const willHide = !menu.classList.contains('hidden');
     menu.classList.toggle('hidden');
     btnMenu.classList.toggle('open', !willHide);
   });
-  // Close menu on click elsewhere or wrapper mouseleave
-  wrap.addEventListener('mouseleave', () => {
-    menu.classList.add('hidden');
-    btnMenu.classList.remove('open');
-  });
+  function closeMenu() { menu.classList.add('hidden'); btnMenu.classList.remove('open'); }
+  wrap.addEventListener('mouseleave', closeMenu);
 
   label.append(dot, name, btnMenu, menu);
 
-  wv.addEventListener('focus',  () => {
+  wv.addEventListener('focus', () => {
     wrap.classList.add('focused');
     window.gameBridge.reportFocus(session.id);
   });
-  wv.addEventListener('blur',   () => wrap.classList.remove('focused'));
+  wv.addEventListener('blur', () => wrap.classList.remove('focused'));
 
   wrap.addEventListener('mouseenter', () => {
-    if (!hoverEnabled) return;
+    if (!hoverEnabled || isDragging) return;
     clearTimeout(hoverTimer);
     if (hoverDelayMs <= 0) {
       try { document.activeElement?.blur?.(); } catch {}
@@ -246,6 +321,8 @@ function createWrapper(session) {
     }, hoverDelayMs);
   });
   wrap.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
+
+  attachLabelDrag(wrap, label, session.id);
 
   wrap.append(wv, label);
   return wrap;
@@ -263,24 +340,97 @@ function syncLabel(session) {
   if (name) name.textContent     = session.name || 'Session';
 }
 
-function applyLockState() {
-  if (!dividerEl) return;
-  dividerEl.classList.toggle('locked', locked);
-}
-
-// ── Save-ratio state ──────────────────────────────────────────────────────────
-
-let saveRatioPending = false;
-
-function setSaveRatioPending(pending) {
-  saveRatioPending = pending;
+function toggleEditMode() {
+  editModeActive = !editModeActive;
+  const label = editModeActive ? 'Lock Positions' : 'Edit Positions';
   for (const wrap of wrappers.values()) {
-    wrap.querySelector('.save-layout-item')?.classList.toggle('hidden', !pending);
+    wrap.classList.toggle('edit-mode', editModeActive);
+    const btn = wrap.querySelector('.edit-position-item');
+    if (btn) btn.textContent = label;
   }
 }
 
-function showSaveRatioBtn() { setSaveRatioPending(true); }
-function hideSaveRatioBtn()  { setSaveRatioPending(false); }
+function attachLabelDrag(wrap, label, sessionId) {
+  label.addEventListener('mousedown', e => {
+    if (!editModeActive) return;
+    if (e.target.closest('.menu-btn') || e.target.closest('.session-menu')) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    isDragging = true;
+    const overlay = overlayEl();
+    overlay.style.cursor = 'grabbing';
+    overlay.classList.add('active');
+    wrap.classList.add('drag-source');
+
+    const fromCell = wrap.dataset.cell;
+
+    const onMove = ev => {
+      let target = null;
+      for (const [id, w] of wrappers) {
+        if (id === sessionId) continue;
+        const r = w.getBoundingClientRect();
+        if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+          target = w;
+          break;
+        }
+      }
+      for (const w of wrappers.values()) {
+        w.classList.toggle('drop-target', w === target);
+      }
+    };
+
+    const onUp = async ev => {
+      isDragging = false;
+      overlay.classList.remove('active');
+      wrap.classList.remove('drag-source');
+
+      let toCell = null;
+      for (const [id, w] of wrappers) {
+        if (id === sessionId) continue;
+        const r = w.getBoundingClientRect();
+        if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+          toCell = w.dataset.cell;
+          break;
+        }
+      }
+      for (const w of wrappers.values()) w.classList.remove('drop-target');
+
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+
+      if (toCell && toCell !== fromCell) {
+        await window.gameBridge.swapCells(fromCell, toCell);
+      }
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function refreshSaveLayoutVisibility() {
+  for (const wrap of wrappers.values()) {
+    wrap.querySelector('.save-layout-item')?.classList.toggle('hidden', !saveLayoutPending);
+  }
+}
+
+function applyZoomState() {
+  for (const [id, wrap] of wrappers) {
+    wrap.classList.toggle('pane-zoomed', id === zoomedSessionId);
+    wrap.style.display = (zoomedSessionId && id !== zoomedSessionId) ? 'none' : '';
+  }
+  for (const d of dividers) d.el.style.display = zoomedSessionId ? 'none' : '';
+}
+
+window.gameBridge.onPaneZoom(() => {
+  const focusedId = (() => {
+    for (const [id, w] of wrappers) if (w.classList.contains('focused')) return id;
+    return null;
+  })();
+  zoomedSessionId = (zoomedSessionId || !focusedId) ? null : focusedId;
+  applyZoomState();
+});
 
 let toastTimer = null;
 function showToast(msg) {
@@ -291,47 +441,11 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('visible'), 1800);
 }
 
-function createDivider(a, b, container, overlay) {
-  const isRow = splitDir === 'row';
-  const div   = document.createElement('div');
-  div.className = `divider ${isRow ? 'vertical' : 'horizontal'}${locked ? ' locked' : ''}`;
-  div.innerHTML = '<div class="divider-handle"></div>';
-
-  div.addEventListener('mousedown', e => {
-    if (locked) return;
-    e.preventDefault();
-    overlay.style.cursor = isRow ? 'col-resize' : 'row-resize';
-    overlay.classList.add('active');
-    div.classList.add('dragging');
-
-    const startPos  = isRow ? e.clientX : e.clientY;
-    const startFlex = parseFloat(a.style.flex);
-    let   reportAt  = 0;
-
-    const onMove = e => {
-      const size    = isRow ? container.clientWidth  : container.clientHeight;
-      const divSize = isRow ? div.offsetWidth        : div.offsetHeight;
-      const delta   = (isRow ? e.clientX : e.clientY) - startPos;
-      const next    = Math.max(0.1, Math.min(0.9, startFlex + delta / (size - divSize)));
-      a.style.flex  = String(next);
-      b.style.flex  = String(1 - next);
-      splitRatio    = next;
-      // Throttle to ~30Hz — enough for live dashboard display without flooding IPC
-      const now = Date.now();
-      if (now - reportAt > 32) { window.gameBridge.reportRatio(next); reportAt = now; }
-    };
-
-    const onUp = () => {
-      overlay.classList.remove('active');
-      div.classList.remove('dragging');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      showSaveRatioBtn();
-    };
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-
-  return div;
-}
+let resizeTimer = null;
+new ResizeObserver(() => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const c = containerEl();
+    window.gameBridge.resizeHint(c.clientWidth, c.clientHeight);
+  }, 150);
+}).observe(document.getElementById('container'));

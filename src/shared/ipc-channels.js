@@ -25,4 +25,13 @@ module.exports = {
   GAME_REPORT_FOCUS:    'game:reportFocus',
   SAVE_LAYOUT_RATIO:    'layout:saveRatio',
   LAYOUT_RATIO_CHANGED: 'layout:ratioChanged',
+  // N-pane additions
+  LAYOUT_UPDATE_RATIOS: 'layout:updateRatios',
+  LAYOUT_SWAP_CELLS:    'layout:swapCells',
+  LAYOUT_RESIZE_HINT:   'layout:resizeHint',
+  LAYOUT_TOGGLE_AUTO:   'layout:toggleAuto',
+  LAYOUT_SAVE:          'layout:save',
+  GAME_PANE_ZOOM:       'game:paneZoom',
+  GAME_SET_MUTED:       'game:setMuted',
+  SESSION_SET_MUTED:    'session:setMuted',
 };

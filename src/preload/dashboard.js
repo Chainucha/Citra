@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const CH = require('../shared/ipc-channels');
 
-contextBridge.exposeInMainWorld('sunkist', {
+contextBridge.exposeInMainWorld('citra', {
   getWorkspace:    ()       => ipcRenderer.invoke(CH.GET_WORKSPACE),
   launchSession:   (id)     => ipcRenderer.invoke(CH.LAUNCH_SESSION, { id }),
   closeSession:    (id)     => ipcRenderer.invoke(CH.CLOSE_SESSION,  { id }),
@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('sunkist', {
   renameSession:   (id, name) => ipcRenderer.invoke(CH.RENAME_SESSION, { id, name }),
   reorderSession:  (id, direction) => ipcRenderer.invoke(CH.REORDER_SESSION, { id, direction }),
   moveSessionToGroup: (sessionId, groupId) => ipcRenderer.invoke(CH.MOVE_SESSION_GROUP, { sessionId, groupId }),
+  setSessionMuted: (id, muted) => ipcRenderer.invoke(CH.SESSION_SET_MUTED, { id, muted }),
   // Group ops
   addGroup:        (name)   => ipcRenderer.invoke(CH.ADD_GROUP,    { name }),
   renameGroup:     (id, name) => ipcRenderer.invoke(CH.RENAME_GROUP, { id, name }),
@@ -26,9 +27,6 @@ contextBridge.exposeInMainWorld('sunkist', {
     ipcRenderer.on(CH.SESSION_STATE_CHANGED, handler);
     return () => ipcRenderer.removeListener(CH.SESSION_STATE_CHANGED, handler);
   },
-  onRatioChanged: (cb) => {
-    const handler = (_e, data) => cb(data);
-    ipcRenderer.on(CH.LAYOUT_RATIO_CHANGED, handler);
-    return () => ipcRenderer.removeListener(CH.LAYOUT_RATIO_CHANGED, handler);
-  },
+  toggleAutoLayout: (groupId) => ipcRenderer.invoke(CH.LAYOUT_TOGGLE_AUTO, { groupId }),
+  saveLayout:       (groupId) => ipcRenderer.invoke(CH.LAYOUT_SAVE,        { groupId }),
 });

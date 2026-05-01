@@ -1,6 +1,6 @@
 {
   "name": "citra",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "ToS-compliant window manager for Flyff Universe dual-clienting",
   "main": "src/main/index.js",
   "scripts": {
@@ -11,8 +11,20 @@
     "electron-store": "^8.2.0",
     "koffi": "^2.10.0"
   },
+  "build": {
+    "appId": "com.citra.app",
+    "productName": "Citra",
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
+    }
+  },
   "devDependencies": {
-    "electron": "^30.0.0",
-    "electron-builder": "^24.0.0"
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1"
   }
 }

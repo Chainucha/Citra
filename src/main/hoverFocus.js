@@ -15,8 +15,12 @@ const POLL_MS = 1;
  * HWND is under it via WindowFromPoint + GetAncestor(GA_ROOT). No rect cache, so
  * window moves/resizes never produce stale hits. Per-webview hover-focus inside
  * a single container lives in the container renderer (game.js), not here.
+ *
+ * Enter-delay: only fires `focusWindow` after the cursor has stayed inside the
+ * same owned HWND for `getDelay()` ms. Prevents transient passes (e.g. cursor
+ * crossing a container on the way to the dashboard) from snatching foreground.
  */
-function start(getSessions) {
+function start(getSessions, getDelay) {
   if (running) return;
 
   const { focusWindow } = require('./win32/windowOps');
@@ -36,7 +40,9 @@ function start(getSessions) {
   // 1ms instead of every ~16ms. Paired with timeEndPeriod(1) in stop().
   if (w.timeBeginPeriod(1) === 0) timerPeriodSet = true;
 
-  let lastHwnd = 0;
+  let lastFocusedHwnd = 0; // hwnd of the last container we successfully focused
+  let pendingHwnd     = 0; // hwnd cursor is currently hovering, awaiting delay
+  let pendingSince    = 0; // timestamp cursor entered pendingHwnd
   const ptOut = [{}];
 
   timer = setInterval(() => {
@@ -44,25 +50,41 @@ function start(getSessions) {
     const { x, y } = ptOut[0];
 
     const raw = w.WindowFromPoint({ x, y });
-    if (!raw) { lastHwnd = 0; return; }
+    if (!raw) { pendingHwnd = 0; return; }
     const rootN = hwndNum(w.GetAncestor(raw, w.GA_ROOT));
-    if (!rootN) { lastHwnd = 0; return; }
+    if (!rootN) { pendingHwnd = 0; return; }
 
     const sessions = getSessions();
     let owned = false;
     for (const s of sessions) {
       if (s.hwnd === rootN) { owned = true; break; }
     }
-    if (!owned) { lastHwnd = 0; return; }
+    if (!owned) { pendingHwnd = 0; return; }
 
-    if (rootN === lastHwnd) return;
+    // Already focused this hwnd — nothing to do.
+    if (rootN === lastFocusedHwnd && hwndNum(w.GetForegroundWindow()) === rootN) {
+      pendingHwnd = rootN;
+      return;
+    }
+
+    // Track dwell time on this owned hwnd.
+    const now = Date.now();
+    if (pendingHwnd !== rootN) {
+      pendingHwnd  = rootN;
+      pendingSince = now;
+      return;
+    }
+
+    const delay = Math.max(0, (typeof getDelay === 'function' ? getDelay() : 0) | 0);
+    if (now - pendingSince < delay) return;
+
     if (hwndNum(w.GetForegroundWindow()) === rootN) {
-      lastHwnd = rootN;
+      lastFocusedHwnd = rootN;
       return;
     }
 
     focusWindow(rootN);
-    lastHwnd = rootN;
+    lastFocusedHwnd = rootN;
   }, POLL_MS);
 
   running = true;
