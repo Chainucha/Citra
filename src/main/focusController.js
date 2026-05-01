@@ -6,9 +6,12 @@ let registered = [];
 
 // Per-group state: groupId → { sessions, onSwitch }
 const cycleByGroup = new Map();
+// Desired per-session hotkey list per group: groupId → [{ accel, handler }]
+const sessionAccels = new Map();
 let onFullscreen = null;
 let onPaneZoom   = null;
 let containerOn  = false;
+let sessionsArmed = false;
 
 // Returns the currently-focused session in a group, derived from session.state.
 // Source of truth is session.state === 'active', set by onSwitch / FOCUS_SESSION.
@@ -25,28 +28,60 @@ function bindHotkeys(groupId, sessions, onSwitch, shouldFire, onFullscreenCb, ce
   unbindGroup(groupId);
   const fire = shouldFire || (() => true);
 
+  const list = [];
   sessions.forEach(session => {
     const accel = session.hotkey;
     if (!accel) return;
-    const ok = globalShortcut.register(accel, () => {
-      if (!fire() || !session.hwnd) return;
-      focusWindow(session.hwnd);
-      onSwitch?.(session);
+    list.push({
+      accel,
+      handler: () => {
+        if (!fire() || !session.hwnd) return;
+        focusWindow(session.hwnd);
+        onSwitch?.(session);
+      },
     });
-    if (ok) registered.push({ groupId, accel });
-    else console.warn(`[hotkey] Could not register "${accel}" — already claimed.`);
   });
+  sessionAccels.set(groupId, list);
 
   cycleByGroup.set(groupId, { sessions, onSwitch, cellOrder });
   if (onFullscreenCb !== undefined) onFullscreen = onFullscreenCb;
+
+  if (sessionsArmed) armSessionGroup(groupId);
 }
 
-function unbindGroup(groupId) {
+function armSessionGroup(groupId) {
+  const list = sessionAccels.get(groupId);
+  if (!list) return;
+  list.forEach(({ accel, handler }) => {
+    if (registered.some(r => r.accel === accel)) return;
+    if (globalShortcut.register(accel, handler)) registered.push({ groupId, accel });
+    else console.warn(`[hotkey] Could not register "${accel}" — already claimed.`);
+  });
+}
+
+function disarmSessionGroup(groupId) {
   registered = registered.filter(r => {
     if (r.groupId !== groupId) return true;
     globalShortcut.unregister(r.accel);
     return false;
   });
+}
+
+function enableSessionHotkeys() {
+  if (sessionsArmed) return;
+  sessionsArmed = true;
+  for (const groupId of sessionAccels.keys()) armSessionGroup(groupId);
+}
+
+function disableSessionHotkeys() {
+  if (!sessionsArmed) return;
+  sessionsArmed = false;
+  for (const groupId of sessionAccels.keys()) disarmSessionGroup(groupId);
+}
+
+function unbindGroup(groupId) {
+  disarmSessionGroup(groupId);
+  sessionAccels.delete(groupId);
   cycleByGroup.delete(groupId);
 }
 
@@ -118,11 +153,14 @@ function cycleFocus() {
 function unbindAll() {
   registered.forEach(r => globalShortcut.unregister(r.accel));
   registered = [];
+  sessionAccels.clear();
   cycleByGroup.clear();
+  sessionsArmed = false;
   disableContainerHotkeys();
 }
 
 module.exports = {
   bindHotkeys, unbindGroup, unbindAll, cycleFocus,
   enableContainerHotkeys, disableContainerHotkeys, setPaneZoomHandler,
+  enableSessionHotkeys, disableSessionHotkeys,
 };

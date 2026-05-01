@@ -17,6 +17,7 @@ const {
 const {
   bindHotkeys, unbindGroup, unbindAll,
   enableContainerHotkeys, disableContainerHotkeys, setPaneZoomHandler,
+  enableSessionHotkeys, disableSessionHotkeys,
 } = require('./focusController');
 const { focusWindow } = require('./win32/windowOps');
 const hoverFocus = require('./hoverFocus');
@@ -222,6 +223,17 @@ function createDashboard() {
 
 app.whenReady().then(() => {
   if (app.isPackaged) Menu.setApplicationMenu(null);
+
+  app.on('browser-window-focus', () => {
+    enableSessionHotkeys();
+  });
+  app.on('browser-window-blur', () => {
+    setImmediate(() => {
+      const anyFocused = BrowserWindow.getAllWindows().some(w => !w.isDestroyed() && w.isFocused());
+      if (!anyFocused) disableSessionHotkeys();
+    });
+  });
+
   createDashboard();
   applyHoverFocus();
   setPaneZoomHandler((groupId) => sendToContainer(groupId, CH.GAME_PANE_ZOOM, {}));
