@@ -147,11 +147,35 @@ function groupSessionIds(workspace, groupId) {
 // Topology = computeAutoGrid(N_active, W, H). Ratios reset to uniform on
 // topology change. cellMap preserves relative order via row-major flatten/refill;
 // new actives fill empty cells. Called on session start/stop.
+function topologyKey(cols, rows) { return `${cols}x${rows}`; }
+
+// Stash current ratios into per-topology cache. Called before topology change
+// or on user-driven save, so a future reopen with the same topology can restore.
+function snapshotRatios(layout) {
+  if (!layout.cols || !layout.rows) return;
+  if (!layout.savedRatios) layout.savedRatios = {};
+  layout.savedRatios[topologyKey(layout.cols, layout.rows)] = {
+    colRatios: layout.colRatios.slice(),
+    rowRatios: layout.rowRatios.slice(),
+  };
+}
+
+function restoreOrUniform(layout, cols, rows) {
+  const cache = layout.savedRatios?.[topologyKey(cols, rows)];
+  if (cache && Array.isArray(cache.colRatios) && cache.colRatios.length === cols
+           && Array.isArray(cache.rowRatios) && cache.rowRatios.length === rows) {
+    return { colRatios: cache.colRatios.slice(), rowRatios: cache.rowRatios.slice() };
+  }
+  return { colRatios: uniformRatios(cols), rowRatios: uniformRatios(rows) };
+}
+
 function recomputeLayoutForActive(group, activeIds, hintW = DEFAULT_W, hintH = DEFAULT_H) {
   const layout = group.layout;
   const N = activeIds.length;
 
   if (N === 0) {
+    // Don't wipe savedRatios — preserve user customizations across full close.
+    snapshotRatios(layout);
     layout.cols = 0; layout.rows = 0;
     layout.colRatios = []; layout.rowRatios = [];
     layout.cellMap = {};
@@ -182,18 +206,22 @@ function recomputeLayoutForActive(group, activeIds, hintW = DEFAULT_W, hintH = D
     return;
   }
 
-  // Topology changed — rebuild via row-major flatten/refill, reset ratios.
+  // Topology changed — snapshot current, rebuild cellMap, restore matching saved ratios or uniform.
+  snapshotRatios(layout);
   layout.cellMap = rebuildCellMap(filtered, layout.cols, layout.rows, cols, rows, activeIds);
   layout.cols = cols;
   layout.rows = rows;
-  layout.colRatios = uniformRatios(cols);
-  layout.rowRatios = uniformRatios(rows);
+  const restored = restoreOrUniform(layout, cols, rows);
+  layout.colRatios = restored.colRatios;
+  layout.rowRatios = restored.rowRatios;
 }
 
 function setLayoutRatios(group, colRatios, rowRatios) {
   const layout = group.layout;
   layout.colRatios = normalizeRatios(colRatios, layout.cols);
   layout.rowRatios = normalizeRatios(rowRatios, layout.rows);
+  // Persist user choice so future topology returns restore it.
+  snapshotRatios(layout);
 }
 
 // Move pane from fromCell to toCell.
