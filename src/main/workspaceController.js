@@ -255,24 +255,28 @@ function renameSession(workspace, id, name) {
   return session;
 }
 
-function reorderSession(workspace, id, direction) {
-  const idx = workspace.sessions.findIndex(s => s.id === id);
-  if (idx < 0) return false;
-  const target = direction === 'up' ? idx - 1 : idx + 1;
-  if (target < 0 || target >= workspace.sessions.length) return false;
-  if (workspace.sessions[idx].groupId !== workspace.sessions[target].groupId) return false;
-  const [moved] = workspace.sessions.splice(idx, 1);
-  workspace.sessions.splice(target, 0, moved);
-  return true;
-}
-
-function moveSessionToGroup(workspace, sessionId, groupId) {
-  const session = workspace.sessions.find(s => s.id === sessionId);
-  if (!session) return null;
+function moveSessionToGroup(workspace, sessionId, groupId, beforeId) {
+  const idx = workspace.sessions.findIndex(s => s.id === sessionId);
+  if (idx < 0) return null;
+  const session = workspace.sessions[idx];
   if (groupId !== null && !workspace.groups.some(g => g.id === groupId)) return null;
   if (session.state !== 'idle') return null;
-  const fromGroupId = session.groupId;
+
   session.groupId = groupId;
+
+  // Optional repositioning. If beforeId is provided, splice the session into
+  // the array immediately before that anchor; null/undefined leaves order alone.
+  if (beforeId !== undefined) {
+    const arr = workspace.sessions;
+    arr.splice(idx, 1);
+    if (beforeId === null) {
+      arr.push(session);
+    } else {
+      const anchor = arr.findIndex(s => s.id === beforeId);
+      if (anchor < 0) arr.push(session);
+      else arr.splice(anchor, 0, session);
+    }
+  }
   return session;
 }
 
@@ -313,7 +317,7 @@ function updateGroup(workspace, id, patch) {
 
 module.exports = {
   loadWorkspace, saveWorkspace,
-  addSession, deleteSession, renameSession, reorderSession, moveSessionToGroup, setSessionMuted,
+  addSession, deleteSession, renameSession, moveSessionToGroup, setSessionMuted,
   addGroup, deleteGroup, renameGroup, updateGroup,
   recomputeLayoutForActive,
   setLayoutRatios, swapLayoutCells,

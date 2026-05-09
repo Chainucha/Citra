@@ -12,8 +12,7 @@ contextBridge.exposeInMainWorld('citra', {
   saveWorkspace:   (data)   => ipcRenderer.invoke(CH.SAVE_WORKSPACE, data),
   setHoverFocus:   (enabled, delayMs) => ipcRenderer.invoke(CH.SET_HOVER_FOCUS, { enabled, delayMs }),
   renameSession:   (id, name) => ipcRenderer.invoke(CH.RENAME_SESSION, { id, name }),
-  reorderSession:  (id, direction) => ipcRenderer.invoke(CH.REORDER_SESSION, { id, direction }),
-  moveSessionToGroup: (sessionId, groupId) => ipcRenderer.invoke(CH.MOVE_SESSION_GROUP, { sessionId, groupId }),
+  moveSessionToGroup: (sessionId, groupId, beforeId) => ipcRenderer.invoke(CH.MOVE_SESSION_GROUP, { sessionId, groupId, beforeId }),
   setSessionMuted: (id, muted) => ipcRenderer.invoke(CH.SESSION_SET_MUTED, { id, muted }),
   // Group ops
   addGroup:        (name)   => ipcRenderer.invoke(CH.ADD_GROUP,    { name }),

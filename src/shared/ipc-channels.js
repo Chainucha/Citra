@@ -8,7 +8,6 @@ module.exports = {
   ADD_SESSION:          'session:add',
   DELETE_SESSION:       'session:delete',
   RENAME_SESSION:       'session:rename',
-  REORDER_SESSION:      'session:reorder',
   MOVE_SESSION_GROUP:   'session:moveToGroup',
   ADD_GROUP:            'group:add',
   DELETE_GROUP:         'group:delete',

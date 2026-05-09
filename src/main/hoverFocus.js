@@ -1,13 +1,15 @@
 let timer   = null;
 let running = false;
-let timerPeriodSet = false;
 
-// Poll cadence — ms between cursor reads. 1ms ≈ 1000Hz; each tick is a few
-// microseconds (GetCursorPos + WindowFromPoint + GetAncestor + small set scan),
-// so CPU cost is negligible. Independent of Electron event-loop backpressure.
-// Effective cadence depends on Windows timer resolution — see timeBeginPeriod
-// call in start() which drops it from default ~15.6ms to 1ms.
-const POLL_MS = 1;
+// Poll cadence — 16ms ≈ 60Hz, aligns with monitor refresh. Default Windows
+// timer resolution (~15.6ms) handles this without timeBeginPeriod.
+// Higher rates (1ms) hammer focusWindow → AttachThreadInput when SetForegroundWindow
+// is blocked by foreground-stealing prevention, which corrupts Windows input
+// state machine and causes stuck-key bugs persisting after process exit.
+const POLL_MS = 16;
+// Cooldown between focus attempts on the same hwnd. If SFW silently fails
+// (stealing prevention), don't retry every poll tick.
+const REFOCUS_COOLDOWN_MS = 250;
 
 /**
  * Start hover-to-focus across containers. Read-only — no input synthesis.
@@ -36,13 +38,11 @@ function start(getSessions, getDelay) {
     return Number(koffi.address(h));
   };
 
-  // Drop system timer resolution to 1ms so setInterval(1) actually fires every
-  // 1ms instead of every ~16ms. Paired with timeEndPeriod(1) in stop().
-  if (w.timeBeginPeriod(1) === 0) timerPeriodSet = true;
-
-  let lastFocusedHwnd = 0; // hwnd of the last container we successfully focused
-  let pendingHwnd     = 0; // hwnd cursor is currently hovering, awaiting delay
-  let pendingSince    = 0; // timestamp cursor entered pendingHwnd
+  let lastFocusedHwnd  = 0; // hwnd of the last container we successfully focused
+  let lastAttemptHwnd  = 0; // hwnd of last focusWindow call
+  let lastAttemptAt    = 0; // timestamp of last focusWindow call
+  let pendingHwnd      = 0; // hwnd cursor is currently hovering, awaiting delay
+  let pendingSince     = 0; // timestamp cursor entered pendingHwnd
   const ptOut = [{}];
 
   timer = setInterval(() => {
@@ -83,6 +83,12 @@ function start(getSessions, getDelay) {
       return;
     }
 
+    // Per-hwnd cooldown — if SFW silently failed (stealing prevention), skip
+    // retries on the same target. Switching to a different hwnd is instant.
+    if (rootN === lastAttemptHwnd && now - lastAttemptAt < REFOCUS_COOLDOWN_MS) return;
+    lastAttemptHwnd = rootN;
+    lastAttemptAt   = now;
+
     focusWindow(rootN);
     lastFocusedHwnd = rootN;
   }, POLL_MS);
@@ -94,11 +100,6 @@ function stop() {
   if (!running) return;
   clearInterval(timer);
   timer = null;
-  if (timerPeriodSet) {
-    const w = require('./win32/bindings');
-    w.timeEndPeriod(1);
-    timerPeriodSet = false;
-  }
   running = false;
 }
 

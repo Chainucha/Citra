@@ -3,7 +3,7 @@ let dividers    = [];
 let layoutState = null;
 let sessionsById = new Map();
 let hoverEnabled = false;
-let hoverDelayMs = 120;
+let hoverDelayMs = 30;
 let hoverTimer   = null;
 let isDragging   = false;
 let zoomedSessionId = null;
@@ -14,7 +14,7 @@ const overlayEl   = () => document.getElementById('drag-overlay');
 
 window.gameBridge.onUpdate(({ sessions, layout, hoverFocusEnabled, hoverFocusDelayMs }) => {
   hoverEnabled = !!hoverFocusEnabled;
-  hoverDelayMs = hoverFocusDelayMs ?? 120;
+  hoverDelayMs = hoverFocusDelayMs ?? 30;
 
   sessionsById = new Map(sessions.map(s => [s.id, s]));
   layoutState = layout;

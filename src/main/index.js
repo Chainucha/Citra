@@ -3,7 +3,7 @@ const path = require('path');
 const CH = require('../shared/ipc-channels');
 const {
   loadWorkspace, saveWorkspace,
-  addSession, deleteSession, renameSession, reorderSession, moveSessionToGroup, setSessionMuted,
+  addSession, deleteSession, renameSession, moveSessionToGroup, setSessionMuted,
   addGroup, deleteGroup, renameGroup, updateGroup,
   recomputeLayoutForActive,
   setLayoutRatios, swapLayoutCells,
@@ -60,7 +60,7 @@ function applyHoverFocus() {
   if (workspace.hoverFocusEnabled) {
     hoverFocus.start(
       () => workspace.sessions,
-      () => workspace.hoverFocusDelayMs ?? 120,
+      () => workspace.hoverFocusDelayMs ?? 30,
     );
   } else {
     hoverFocus.stop();
@@ -91,7 +91,7 @@ function sendGameUpdate(groupId) {
     sessions: active.map(({ id, name, url, accentColor, muted }) => ({ id, name, url, accentColor, muted: !!muted })),
     layout,
     hoverFocusEnabled: !!workspace.hoverFocusEnabled,
-    hoverFocusDelayMs: workspace.hoverFocusDelayMs ?? 120,
+    hoverFocusDelayMs: workspace.hoverFocusDelayMs ?? 30,
   });
 }
 
@@ -285,16 +285,6 @@ app.whenReady().then(() => {
     return { ok: true, session: { ...session } };
   });
 
-  ipcMain.handle(CH.REORDER_SESSION, (_e, { id, direction }) => {
-    if (!reorderSession(workspace, id, direction)) return { error: 'Cannot move' };
-    saveWorkspace(workspace);
-    workspace.sessions.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
-    const target = workspace.sessions.find(s => s.id === id);
-    if (target && isContainerAlive(target.groupId)) sendGameUpdate(target.groupId);
-    if (target) rebindGroupHotkeys(target.groupId);
-    return { ok: true, sessions: workspace.sessions.map(s => ({ ...s })) };
-  });
-
   ipcMain.handle(CH.SESSION_SET_MUTED, (_e, { id, muted }) => {
     const session = setSessionMuted(workspace, id, muted);
     if (!session) return { error: 'Session not found' };
@@ -306,12 +296,20 @@ app.whenReady().then(() => {
     return { ok: true, session: { ...session } };
   });
 
-  ipcMain.handle(CH.MOVE_SESSION_GROUP, (_e, { sessionId, groupId }) => {
-    const session = moveSessionToGroup(workspace, sessionId, groupId);
+  ipcMain.handle(CH.MOVE_SESSION_GROUP, (_e, { sessionId, groupId, beforeId }) => {
+    const before = workspace.sessions.find(s => s.id === sessionId);
+    const fromGroupId = before?.groupId ?? null;
+    const session = moveSessionToGroup(workspace, sessionId, groupId, beforeId);
     if (!session) return { error: 'Cannot move (session running or invalid group)' };
     saveWorkspace(workspace);
-    safeSend(CH.SESSION_STATE_CHANGED, { ...session });
-    return { ok: true, session: { ...session } };
+    workspace.sessions.forEach(s => safeSend(CH.SESSION_STATE_CHANGED, { ...s }));
+    // Reorder/cross-group affects Tab cycle order + per-group hotkey list.
+    const groupsToUpdate = new Set([fromGroupId, groupId].filter(Boolean));
+    groupsToUpdate.forEach(gid => {
+      rebindGroupHotkeys(gid);
+      if (isContainerAlive(gid)) sendGameUpdate(gid);
+    });
+    return { ok: true, session: { ...session }, sessions: workspace.sessions.map(s => ({ ...s })) };
   });
 
   ipcMain.handle(CH.FOCUS_SESSION, (_e, { id }) => {
@@ -422,7 +420,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle(CH.SET_HOVER_FOCUS, (_e, { enabled, delayMs }) => {
     workspace.hoverFocusEnabled = !!enabled;
-    workspace.hoverFocusDelayMs = delayMs ?? 120;
+    workspace.hoverFocusDelayMs = delayMs ?? 30;
     saveWorkspace(workspace);
     applyHoverFocus();
     workspace.groups.forEach(g => { if (isContainerAlive(g.id)) sendGameUpdate(g.id); });

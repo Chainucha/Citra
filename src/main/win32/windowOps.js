@@ -1,4 +1,13 @@
 const w = require('./bindings');
+const koffi = require('koffi');
+
+// koffi opaque-pointer HWNDs come back as External objects, not Numbers.
+// `===` against a JS Number HWND never matches. Normalize before comparing.
+const hwndNum = (h) => {
+  if (h == null) return 0;
+  if (typeof h === 'number') return h;
+  return Number(koffi.address(h));
+};
 
 /** Move/resize without stealing focus. */
 function placeWindow(hwnd, { x, y, width, height }) {
@@ -17,7 +26,8 @@ function getRect(hwnd) {
 /** Reliably bring window to foreground using AttachThreadInput. */
 function focusWindow(hwnd) {
   const fg = w.GetForegroundWindow();
-  if (fg === hwnd) return;          // already foreground, nothing to do
+  const target = hwndNum(hwnd);
+  if (hwndNum(fg) === target) return;   // already foreground, skip AttachThreadInput
   if (!fg) { w.SetForegroundWindow(hwnd); return; }
 
   const fgPidOut = [0];

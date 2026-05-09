@@ -10,29 +10,26 @@ body { background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
 .section-label { color: #888; font-size: 10px; letter-spacing: .08em;
                  text-transform: uppercase; margin-bottom: 8px; }
 #session-list { list-style: none; flex: 1; }
-#session-list li { display: flex; align-items: center; gap: 8px; padding: 6px 4px;
-                   font-size: 13px; border-radius: 4px; cursor: grab; }
+#session-list li { display: flex; align-items: center; gap: 10px; padding: 10px 8px;
+                   font-size: 15px; border-radius: 6px; cursor: grab; margin-bottom: 2px; }
 #session-list li:hover { background: #1e3a5f; }
-.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+#session-list .session-name { font-size: 15px; }
 .session-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-state { font-size: 10px; color: #888; }
+.session-state { font-size: 11px; color: #888; }
 .session-state.tracking { color: #34d399; }
 .session-state.launching { color: #fbbf24; }
 .session-state.active { color: #60a5fa; }
 .btn-focus { background: transparent; border: none; color: #f59e0b;
-             cursor: pointer; font-size: 10px; padding: 0 2px; opacity: 0.7; }
+             cursor: pointer; font-size: 13px; padding: 2px 4px; opacity: 0.7; }
 .btn-focus:hover { opacity: 1; }
 .btn-rename { background: transparent; border: none; color: #888;
-              cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.7; }
+              cursor: pointer; font-size: 14px; padding: 2px 4px; opacity: 0.7; }
 .btn-rename:hover { opacity: 1; color: #f59e0b; }
 .btn-mute { background: transparent; border: none; color: #888;
-            cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.7; }
+            cursor: pointer; font-size: 14px; padding: 2px 4px; opacity: 0.7; }
 .btn-mute:hover { opacity: 1; color: #f59e0b; }
 .btn-mute.muted { color: #f87171; opacity: 1; }
-.btn-move { background: transparent; border: none; color: #888;
-            cursor: pointer; font-size: 9px; padding: 0 1px; opacity: 0.7; }
-.btn-move:hover:not(:disabled) { opacity: 1; color: #f59e0b; }
-.btn-move:disabled { opacity: 0.2; cursor: default; }
 #btn-add, #btn-add-group { background: transparent; border: 1px solid #334155; color: #888;
            padding: 6px 10px; cursor: pointer; font-size: 12px; border-radius: 4px;
            margin-top: 8px; }
@@ -99,6 +96,10 @@ body { background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
 #session-list li.dragging { opacity: 0.4; cursor: grabbing; }
 .session-card[draggable="true"] { cursor: grab; }
 .session-card.dragging { opacity: 0.4; }
+.session-card.drop-before { box-shadow: -3px 0 0 var(--accent, #7c6af7); }
+.session-card.drop-after  { box-shadow:  3px 0 0 var(--accent, #7c6af7); }
+#session-list li.drop-before { box-shadow: 0 -2px 0 var(--accent, #7c6af7); }
+#session-list li.drop-after  { box-shadow: 0  2px 0 var(--accent, #7c6af7); }
 .group-section.drag-over { outline: 2px dashed var(--accent, #7c6af7); outline-offset: -4px; }
 .session-card { background: #16213e; border-radius: 8px; padding: 16px;
                 width: 200px; border: 1px solid #1e3a5f; }

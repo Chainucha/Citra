@@ -35,8 +35,7 @@ function renderAll() {
 function renderSidebar() {
   const list = document.getElementById('session-list');
   const sessions = workspace.sessions;
-  const last = sessions.length - 1;
-  list.innerHTML = sessions.map((s, i) => {
+  list.innerHTML = sessions.map((s) => {
     const group = workspace.groups.find(g => g.id === s.groupId);
     const groupLabel = group?.name || 'ungrouped';
     return `
@@ -44,8 +43,6 @@ function renderSidebar() {
       <span class="dot" style="background:${esc(s.accentColor)}"></span>
       <span class="session-name" title="${esc(s.name)} — ${esc(groupLabel)}">${esc(s.name)}</span>
       <span class="session-state ${esc(s.state)}">${esc(s.state)}</span>
-      <button class="btn-move" data-id="${s.id}" data-dir="up" title="Move up" ${i === 0 ? 'disabled' : ''}>&#9650;</button>
-      <button class="btn-move" data-id="${s.id}" data-dir="down" title="Move down" ${i === last ? 'disabled' : ''}>&#9660;</button>
       <button class="btn-mute ${s.muted ? 'muted' : ''}" data-id="${s.id}" data-muted="${s.muted ? '1' : '0'}" title="${s.muted ? 'Unmute' : 'Mute'}">${s.muted ? '&#128263;' : '&#128266;'}</button>
       <button class="btn-rename" data-id="${s.id}" data-name="${esc(s.name)}" title="Rename">&#9998;</button>
       ${s.hwnd ? `<button class="btn-focus" data-id="${s.id}">&#9654;</button>` : ''}
@@ -67,13 +64,6 @@ function renderSidebar() {
       }
       renderAll();
     }));
-  list.querySelectorAll('.btn-move').forEach(b =>
-    b.addEventListener('click', async () => {
-      const r = await window.citra.reorderSession(b.dataset.id, b.dataset.dir);
-      if (r?.error) { setStatus(r.error, true); return; }
-      if (r?.sessions) workspace.sessions = r.sessions;
-      renderAll();
-    }));
 
   list.querySelectorAll('li[draggable]').forEach(li => {
     li.addEventListener('dragstart', e => {
@@ -84,6 +74,36 @@ function renderSidebar() {
     });
     li.addEventListener('dragend', () => {
       li.classList.remove('dragging');
+    });
+    // Drop on sidebar item = reorder in workspace array, keep dragged session's group.
+    // Cursor Y vs midpoint decides before-vs-after (after = beforeId of next sibling, null if last).
+    li.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = li.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      li.classList.toggle('drop-before', !after);
+      li.classList.toggle('drop-after',   after);
+    });
+    li.addEventListener('dragleave', () => {
+      li.classList.remove('drop-before');
+      li.classList.remove('drop-after');
+    });
+    li.addEventListener('drop', async e => {
+      e.preventDefault();
+      const rect = li.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      li.classList.remove('drop-before');
+      li.classList.remove('drop-after');
+      const sessionId = e.dataTransfer.getData('text/session-id');
+      if (!sessionId || sessionId === li.dataset.id) return;
+      const dragged = workspace.sessions.find(s => s.id === sessionId);
+      if (!dragged) return;
+      const anchorId = after ? (li.nextElementSibling?.dataset.id ?? null) : li.dataset.id;
+      // Dropping on self's neighbor in the "after self" slot → no-op (would land back on self).
+      if (anchorId === sessionId) return;
+      const r = await reorderOrMove(sessionId, dragged.groupId, anchorId);
+      if (r) setStatus(r);
     });
   });
 }
@@ -259,7 +279,7 @@ function attachGroupHandlers(root) {
     });
   });
 
-  // Card drag-and-drop sources
+  // Card drag-and-drop sources + per-card drop targets (place-before reorder)
   root.querySelectorAll('.session-card').forEach(card => {
     card.addEventListener('dragstart', e => {
       if (card.dataset.state !== 'idle') { e.preventDefault(); return; }
@@ -270,9 +290,38 @@ function attachGroupHandlers(root) {
     card.addEventListener('dragend', () => {
       card.classList.remove('dragging');
     });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = card.getBoundingClientRect();
+      const after = e.clientX > rect.left + rect.width / 2;
+      card.classList.toggle('drop-before', !after);
+      card.classList.toggle('drop-after',   after);
+    });
+    card.addEventListener('dragleave', () => {
+      card.classList.remove('drop-before');
+      card.classList.remove('drop-after');
+    });
+    card.addEventListener('drop', async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = card.getBoundingClientRect();
+      const after = e.clientX > rect.left + rect.width / 2;
+      card.classList.remove('drop-before');
+      card.classList.remove('drop-after');
+      const sessionId = e.dataTransfer.getData('text/session-id');
+      if (!sessionId || sessionId === card.dataset.id) return;
+      const section = card.closest('.group-section');
+      const groupId = section?.dataset.groupId || null;
+      const anchorId = after ? (card.nextElementSibling?.dataset.id ?? null) : card.dataset.id;
+      if (anchorId === sessionId) return;
+      const r = await reorderOrMove(sessionId, groupId, anchorId);
+      if (r) setStatus(r);
+    });
   });
 
-  // Group sections as drop targets
+  // Group sections as drop targets (drop on empty area = append at end)
   root.querySelectorAll('.group-section').forEach(section => {
     section.addEventListener('dragover', e => {
       e.preventDefault();
@@ -289,16 +338,9 @@ function attachGroupHandlers(root) {
       section.classList.remove('drag-over');
       const sessionId = e.dataTransfer.getData('text/session-id');
       const groupId = section.dataset.groupId === '' ? null : section.dataset.groupId;
-      const session = workspace.sessions.find(s => s.id === sessionId);
-      if (!session || session.groupId === groupId) return;
-      const r = await window.citra.moveSessionToGroup(sessionId, groupId);
-      if (r?.error) { setStatus(r.error, true); return; }
-      if (r?.session) {
-        const idx = workspace.sessions.findIndex(s => s.id === r.session.id);
-        if (idx >= 0) workspace.sessions[idx] = { ...workspace.sessions[idx], ...r.session };
-      }
-      renderAll();
-      setStatus('Moved');
+      if (!sessionId) return;
+      const r = await reorderOrMove(sessionId, groupId, null);
+      if (r) setStatus(r);
     });
   });
 
@@ -335,6 +377,24 @@ function attachGroupHandlers(root) {
   });
 }
 
+// Unified reorder/cross-group move. beforeId=null appends at end of group.
+async function reorderOrMove(sessionId, groupId, beforeId) {
+  const session = workspace.sessions.find(s => s.id === sessionId);
+  if (!session) return null;
+  // No-op: dropping in same group with no anchor change.
+  if (session.groupId === groupId && beforeId === null && isLastInGroup(session)) return null;
+  const r = await window.citra.moveSessionToGroup(sessionId, groupId, beforeId);
+  if (r?.error) { setStatus(r.error, true); return null; }
+  if (r?.sessions) workspace.sessions = r.sessions;
+  renderAll();
+  return session.groupId !== groupId ? 'Moved' : 'Reordered';
+}
+
+function isLastInGroup(session) {
+  const peers = workspace.sessions.filter(s => s.groupId === session.groupId);
+  return peers[peers.length - 1]?.id === session.id;
+}
+
 function setStatus(msg, isError = false) {
   const el = document.getElementById('status-msg');
   el.textContent = msg;
@@ -342,11 +402,6 @@ function setStatus(msg, isError = false) {
   clearTimeout(statusTimer);
   statusTimer = setTimeout(() => { el.textContent = ''; }, 3000);
 }
-
-document.getElementById('btn-save').addEventListener('click', async () => {
-  await window.citra.saveWorkspace({});
-  setStatus('Saved');
-});
 
 // ── Add Session dialog ─────────────────────────────────────────────────────
 const dlgAdd      = document.getElementById('dlg-add');
@@ -469,7 +524,7 @@ function renderHover(enabled) {
 btnHover.addEventListener('click', async () => {
   const next = btnHover.getAttribute('aria-pressed') !== 'true';
   renderHover(next);
-  await window.citra.setHoverFocus(next, 120);
+  await window.citra.setHoverFocus(next, 30);
   setStatus(next ? 'Hover focus on' : 'Hover focus off');
 });
 
