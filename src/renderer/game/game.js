@@ -8,7 +8,6 @@ let hoverTimer   = null;
 let isDragging   = false;
 let zoomedSessionId = null;
 let editModeActive = false;
-let saveLayoutPending = false;
 
 const containerEl = () => document.getElementById('container');
 const overlayEl   = () => document.getElementById('drag-overlay');
@@ -170,9 +169,7 @@ function attachColDividerDrag(el, index) {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       await window.gameBridge.updateRatios(layoutState.colRatios, layoutState.rowRatios);
-      saveLayoutPending = true;
-      refreshSaveLayoutVisibility();
-      showToast('Layout updated');
+      showToast('Layout saved');
     };
 
     document.addEventListener('mousemove', onMove);
@@ -213,9 +210,7 @@ function attachRowDividerDrag(el, index) {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       await window.gameBridge.updateRatios(layoutState.colRatios, layoutState.rowRatios);
-      saveLayoutPending = true;
-      refreshSaveLayoutVisibility();
-      showToast('Layout updated');
+      showToast('Layout saved');
     };
 
     document.addEventListener('mousemove', onMove);
@@ -268,18 +263,6 @@ function createWrapper(session) {
     closeMenu();
   });
 
-  const itemSave = document.createElement('button');
-  itemSave.className = 'save-layout-item hidden';
-  itemSave.textContent = 'Save Layout';
-  if (saveLayoutPending) itemSave.classList.remove('hidden');
-  itemSave.addEventListener('click', async () => {
-    closeMenu();
-    await window.gameBridge.saveLayout();
-    saveLayoutPending = false;
-    refreshSaveLayoutVisibility();
-    showToast('Layout saved');
-  });
-
   const itemEdit = document.createElement('button');
   itemEdit.className = 'edit-position-item';
   itemEdit.textContent = editModeActive ? 'Lock Positions' : 'Edit Positions';
@@ -288,7 +271,7 @@ function createWrapper(session) {
     toggleEditMode();
   });
 
-  menu.append(itemDash, itemSave, itemEdit);
+  menu.append(itemDash, itemEdit);
 
   btnMenu.addEventListener('click', e => {
     e.stopPropagation();
@@ -364,41 +347,32 @@ function attachLabelDrag(wrap, label, sessionId) {
     wrap.classList.add('drag-source');
 
     const fromCell = wrap.dataset.cell;
+    // Highlight target cell (works for empty cells too, where no wrapper exists).
+    const highlight = document.createElement('div');
+    highlight.style.cssText = 'position:absolute;pointer-events:none;outline:3px solid var(--accent,#f59e0b);outline-offset:-3px;background:rgba(245,158,11,0.18);box-sizing:border-box;display:none;';
+    overlay.appendChild(highlight);
 
     const onMove = ev => {
-      let target = null;
-      for (const [id, w] of wrappers) {
-        if (id === sessionId) continue;
-        const r = w.getBoundingClientRect();
-        if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
-          target = w;
-          break;
-        }
-      }
-      for (const w of wrappers.values()) {
-        w.classList.toggle('drop-target', w === target);
-      }
+      const key = cellAtPoint(ev.clientX, ev.clientY);
+      if (!key || key === fromCell) { highlight.style.display = 'none'; return; }
+      const rect = cellViewportRect(key);
+      if (!rect) { highlight.style.display = 'none'; return; }
+      highlight.style.left   = rect.left + 'px';
+      highlight.style.top    = rect.top + 'px';
+      highlight.style.width  = rect.width + 'px';
+      highlight.style.height = rect.height + 'px';
+      highlight.style.display = 'block';
     };
 
     const onUp = async ev => {
       isDragging = false;
       overlay.classList.remove('active');
       wrap.classList.remove('drag-source');
-
-      let toCell = null;
-      for (const [id, w] of wrappers) {
-        if (id === sessionId) continue;
-        const r = w.getBoundingClientRect();
-        if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
-          toCell = w.dataset.cell;
-          break;
-        }
-      }
-      for (const w of wrappers.values()) w.classList.remove('drop-target');
-
+      highlight.remove();
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
 
+      const toCell = cellAtPoint(ev.clientX, ev.clientY);
       if (toCell && toCell !== fromCell) {
         await window.gameBridge.swapCells(fromCell, toCell);
       }
@@ -409,16 +383,54 @@ function attachLabelDrag(wrap, label, sessionId) {
   });
 }
 
-function refreshSaveLayoutVisibility() {
-  for (const wrap of wrappers.values()) {
-    wrap.querySelector('.save-layout-item')?.classList.toggle('hidden', !saveLayoutPending);
+function ratioIndex(ratios, p, total) {
+  if (!ratios || !ratios.length) return -1;
+  let acc = 0;
+  for (let i = 0; i < ratios.length; i++) {
+    acc += ratios[i] * total;
+    if (p <= acc) return i;
   }
+  return ratios.length - 1;
+}
+
+function cellAtPoint(x, y) {
+  if (!layoutState || !layoutState.cols || !layoutState.rows) return null;
+  const r = containerEl().getBoundingClientRect();
+  const lx = x - r.left, ly = y - r.top;
+  if (lx < 0 || ly < 0 || lx > r.width || ly > r.height) return null;
+  const col = ratioIndex(layoutState.colRatios, lx, r.width);
+  const row = ratioIndex(layoutState.rowRatios, ly, r.height);
+  if (col < 0 || row < 0) return null;
+  return `${row},${col}`;
+}
+
+function cellViewportRect(key) {
+  const m = /^(\d+),(\d+)$/.exec(key);
+  if (!m) return null;
+  const row = +m[1], col = +m[2];
+  const cr = containerEl().getBoundingClientRect();
+  let x = cr.left;
+  for (let i = 0; i < col; i++) x += layoutState.colRatios[i] * cr.width;
+  let y = cr.top;
+  for (let i = 0; i < row; i++) y += layoutState.rowRatios[i] * cr.height;
+  return {
+    left: x, top: y,
+    width:  layoutState.colRatios[col] * cr.width,
+    height: layoutState.rowRatios[row] * cr.height,
+  };
 }
 
 function applyZoomState() {
   for (const [id, wrap] of wrappers) {
+    const hidden = zoomedSessionId && id !== zoomedSessionId;
     wrap.classList.toggle('pane-zoomed', id === zoomedSessionId);
-    wrap.style.display = (zoomedSessionId && id !== zoomedSessionId) ? 'none' : '';
+    wrap.style.display = hidden ? 'none' : '';
+    const wv = wrap.querySelector('webview');
+    if (wv) {
+      const session = sessionsById.get(id);
+      const desiredMute = hidden ? true : !!session?.muted;
+      try { wv.setAudioMuted(desiredMute); } catch {}
+    }
   }
   for (const d of dividers) d.el.style.display = zoomedSessionId ? 'none' : '';
 }
@@ -441,11 +453,3 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('visible'), 1800);
 }
 
-let resizeTimer = null;
-new ResizeObserver(() => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    const c = containerEl();
-    window.gameBridge.resizeHint(c.clientWidth, c.clientHeight);
-  }, 150);
-}).observe(document.getElementById('container'));

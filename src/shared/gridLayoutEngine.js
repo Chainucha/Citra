@@ -3,6 +3,7 @@
 function computeAutoGrid(N, W, H) {
   if (N <= 0) return { cols: 0, rows: 0 };
   if (N === 1) return { cols: 1, rows: 1 };
+  if (N === 2) return { cols: 2, rows: 1 };
   const safeW = W > 0 ? W : 16;
   const safeH = H > 0 ? H : 9;
   const aspect = safeW / safeH;

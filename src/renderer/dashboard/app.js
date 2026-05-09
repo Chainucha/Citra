@@ -2,10 +2,9 @@ let workspace = { sessions: [], groups: [] };
 let statusTimer = null;
 
 function describeLayout(group) {
-  const L = group.layout || { cols: 0, rows: 0, manual: false };
+  const L = group.layout || { cols: 0, rows: 0 };
   const n = countSessionsInGroup(group);
-  const tag = L.manual ? 'Locked' : 'Auto';
-  return `${tag} · ${L.cols || 0}×${L.rows || 0} (${n} pane${n === 1 ? '' : 's'})`;
+  return `${L.cols || 0}×${L.rows || 0} (${n} pane${n === 1 ? '' : 's'})`;
 }
 
 function countSessionsInGroup(group) {
@@ -212,9 +211,6 @@ function renderGroupSection(group) {
       <div class="group-toolbar">
         <span class="section-label inline">LAYOUT</span>
         <span class="layout-display">${esc(describeLayout(group))}</span>
-        <button class="btn-toggle ${group.layout?.manual ? 'locked' : 'on'}" data-group-action="toggle-auto" data-id="${group.id}">
-          ${group.layout?.manual ? '🔒 Locked — Reset to Auto' : '✓ Auto Layout'}
-        </button>
       </div>
     </section>`;
 }
@@ -317,22 +313,6 @@ function attachGroupHandlers(root) {
       } else if (groupAction === 'close') {
         await window.citra.closeGroup(id);
         setStatus('Group closed');
-      } else if (groupAction === 'toggle-auto') {
-        const group = workspace.groups.find(g => g.id === id);
-        if (!group) return;
-        if (group.layout?.manual) {
-          const r = await window.citra.toggleAutoLayout(id);
-          if (r?.error) { setStatus(r.error, true); return; }
-          if (r.layout) group.layout = r.layout;
-          renderAll();
-          setStatus('Auto layout');
-        } else {
-          const r = await window.citra.saveLayout(id);
-          if (r?.error) { setStatus(r.error, true); return; }
-          if (r.layout) group.layout = r.layout;
-          renderAll();
-          setStatus('Layout locked');
-        }
       } else if (groupAction === 'rename') {
         openGroupDialog('rename', id, name);
       } else if (groupAction === 'delete') {

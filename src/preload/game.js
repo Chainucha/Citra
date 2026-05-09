@@ -14,8 +14,6 @@ contextBridge.exposeInMainWorld('gameBridge', {
 
   updateRatios:    (colRatios, rowRatios) => ipcRenderer.invoke(CH.LAYOUT_UPDATE_RATIOS, { groupId, colRatios, rowRatios }),
   swapCells:       (fromCell, toCell)     => ipcRenderer.invoke(CH.LAYOUT_SWAP_CELLS,    { groupId, fromCell, toCell }),
-  resizeHint:      (width, height)        => ipcRenderer.send(CH.LAYOUT_RESIZE_HINT,    { width, height }),
-  saveLayout:      ()                     => ipcRenderer.invoke(CH.LAYOUT_SAVE,          { groupId }),
 
   reportFocus:     (id) => ipcRenderer.send(CH.GAME_REPORT_FOCUS, { groupId, id }),
   openDashboard:   ()   => ipcRenderer.send(CH.OPEN_DASHBOARD),

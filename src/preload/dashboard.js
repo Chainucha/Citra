@@ -27,6 +27,4 @@ contextBridge.exposeInMainWorld('citra', {
     ipcRenderer.on(CH.SESSION_STATE_CHANGED, handler);
     return () => ipcRenderer.removeListener(CH.SESSION_STATE_CHANGED, handler);
   },
-  toggleAutoLayout: (groupId) => ipcRenderer.invoke(CH.LAYOUT_TOGGLE_AUTO, { groupId }),
-  saveLayout:       (groupId) => ipcRenderer.invoke(CH.LAYOUT_SAVE,        { groupId }),
 });

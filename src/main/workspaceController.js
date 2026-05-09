@@ -15,7 +15,6 @@ function makeDefaultLayout() {
     colRatios: [],
     rowRatios: [],
     cellMap: {},
-    manual: false,
   };
 }
 
@@ -38,8 +37,27 @@ function legacyPresetToRatios(preset, splitRatio) {
   return                      { cols: 1, rows: 2, colRatios: [1], rowRatios: [a, 1 - a] };
 }
 
+function isLayoutValid(l) {
+  if (!l || typeof l !== 'object') return false;
+  const { cols, rows, colRatios, rowRatios, cellMap } = l;
+  if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 0 || rows < 0) return false;
+  if (!Array.isArray(colRatios) || colRatios.length !== cols) return false;
+  if (!Array.isArray(rowRatios) || rowRatios.length !== rows) return false;
+  if (!cellMap || typeof cellMap !== 'object') return false;
+  for (const k of Object.keys(cellMap)) {
+    const m = /^(\d+),(\d+)$/.exec(k);
+    if (!m) return false;
+    const r = +m[1], c = +m[2];
+    if (r >= rows || c >= cols) return false;
+  }
+  return true;
+}
+
 function migrateGroup(group, sessionIds) {
-  if (group.layout && Array.isArray(group.layout.colRatios)) return;
+  if (group.layout && isLayoutValid(group.layout)) return;
+  // Either legacy (no modern layout) or corrupted modern layout — regenerate.
+  const isLegacy = !group.layout || !Array.isArray(group.layout.colRatios);
+  if (!isLegacy) group.layout = null;
 
   const N = sessionIds.length;
   if (N === 0) {
@@ -49,15 +67,13 @@ function migrateGroup(group, sessionIds) {
       cols: 1, rows: 1,
       colRatios: [1], rowRatios: [1],
       cellMap: { [cellKey(0, 0)]: sessionIds[0] },
-      manual: !!group.lockLayout,
     };
-  } else if (N === 2 && group.activePreset) {
+  } else if (N === 2 && isLegacy && group.activePreset) {
     const r = legacyPresetToRatios(group.activePreset, group.splitRatio);
     group.layout = {
       cols: r.cols, rows: r.rows,
       colRatios: r.colRatios, rowRatios: r.rowRatios,
       cellMap: fillCellMap(sessionIds, r.cols, r.rows),
-      manual: !!group.lockLayout,
     };
   } else {
     const { cols, rows } = computeAutoGrid(N, DEFAULT_W, DEFAULT_H);
@@ -66,7 +82,6 @@ function migrateGroup(group, sessionIds) {
       colRatios: uniformRatios(cols),
       rowRatios: uniformRatios(rows),
       cellMap: fillCellMap(sessionIds, cols, rows),
-      manual: !!group.lockLayout,
     };
   }
   delete group.activePreset;
@@ -128,9 +143,13 @@ function groupSessionIds(workspace, groupId) {
   return workspace.sessions.filter(s => s.groupId === groupId).map(s => s.id);
 }
 
-function ensureLayoutForCount(group, sessionIds, hintW = DEFAULT_W, hintH = DEFAULT_H) {
-  const N = sessionIds.length;
+// Recompute layout for current active sessions.
+// Topology = computeAutoGrid(N_active, W, H). Ratios reset to uniform on
+// topology change. cellMap preserves relative order via row-major flatten/refill;
+// new actives fill empty cells. Called on session start/stop.
+function recomputeLayoutForActive(group, activeIds, hintW = DEFAULT_W, hintH = DEFAULT_H) {
   const layout = group.layout;
+  const N = activeIds.length;
 
   if (N === 0) {
     layout.cols = 0; layout.rows = 0;
@@ -139,48 +158,46 @@ function ensureLayoutForCount(group, sessionIds, hintW = DEFAULT_W, hintH = DEFA
     return;
   }
 
-  if (layout.manual && N <= layout.cols * layout.rows) {
-    const valid = new Set(sessionIds);
-    const next = {};
-    for (const k of Object.keys(layout.cellMap)) {
-      if (valid.has(layout.cellMap[k])) next[k] = layout.cellMap[k];
+  const { cols, rows } = computeAutoGrid(N, hintW, hintH);
+
+  // Drop entries not in active set.
+  const valid = new Set(activeIds);
+  const filtered = {};
+  for (const k of Object.keys(layout.cellMap)) {
+    if (valid.has(layout.cellMap[k])) filtered[k] = layout.cellMap[k];
+  }
+
+  if (cols === layout.cols && rows === layout.rows) {
+    layout.cellMap = filtered;
+    // Same topology — fill missing actives into empty cells (row-major).
+    const placed = new Set(Object.values(layout.cellMap));
+    const missing = activeIds.filter(id => !placed.has(id));
+    let mi = 0;
+    for (let r = 0; r < rows && mi < missing.length; r++) {
+      for (let c = 0; c < cols && mi < missing.length; c++) {
+        const k = cellKey(r, c);
+        if (!layout.cellMap[k]) layout.cellMap[k] = missing[mi++];
+      }
     }
-    layout.cellMap = next;
     return;
   }
 
-  if (layout.manual && N > layout.cols * layout.rows) {
-    layout.manual = false;
-  }
-
-  const { cols, rows } = computeAutoGrid(N, hintW, hintH);
-  layout.cellMap = rebuildCellMap(layout.cellMap, layout.cols, layout.rows, cols, rows, sessionIds);
+  // Topology changed — rebuild via row-major flatten/refill, reset ratios.
+  layout.cellMap = rebuildCellMap(filtered, layout.cols, layout.rows, cols, rows, activeIds);
   layout.cols = cols;
   layout.rows = rows;
   layout.colRatios = uniformRatios(cols);
   layout.rowRatios = uniformRatios(rows);
 }
 
-function placeSessionInLayout(group, sessionId) {
-  const layout = group.layout;
-  for (const k of Object.keys(layout.cellMap)) {
-    if (layout.cellMap[k] === sessionId) return;
-  }
-  for (let r = 0; r < layout.rows; r++) {
-    for (let c = 0; c < layout.cols; c++) {
-      const k = cellKey(r, c);
-      if (!layout.cellMap[k]) { layout.cellMap[k] = sessionId; return; }
-    }
-  }
-}
-
 function setLayoutRatios(group, colRatios, rowRatios) {
   const layout = group.layout;
   layout.colRatios = normalizeRatios(colRatios, layout.cols);
   layout.rowRatios = normalizeRatios(rowRatios, layout.rows);
-  layout.manual = true;
 }
 
+// Move pane from fromCell to toCell.
+// Empty toCell → relocate. Occupied toCell → swap.
 function swapLayoutCells(group, fromCell, toCell) {
   const layout = group.layout;
   const a = layout.cellMap[fromCell];
@@ -189,28 +206,6 @@ function swapLayoutCells(group, fromCell, toCell) {
   if (fromCell === toCell) return false;
   if (b) layout.cellMap[fromCell] = b; else delete layout.cellMap[fromCell];
   layout.cellMap[toCell] = a;
-  return true;
-}
-
-function setLayoutManual(group, manual) {
-  const layout = group.layout;
-  layout.manual = !!manual;
-  if (!layout.manual) {
-    layout.colRatios = uniformRatios(layout.cols);
-    layout.rowRatios = uniformRatios(layout.rows);
-  }
-}
-
-function applyResizeHint(group, sessionIds, W, H) {
-  const layout = group.layout;
-  if (layout.manual) return false;
-  const { cols, rows } = computeAutoGrid(sessionIds.length, W, H);
-  if (cols === layout.cols && rows === layout.rows) return false;
-  layout.cellMap = rebuildCellMap(layout.cellMap, layout.cols, layout.rows, cols, rows, sessionIds);
-  layout.cols = cols;
-  layout.rows = rows;
-  layout.colRatios = uniformRatios(cols);
-  layout.rowRatios = uniformRatios(rows);
   return true;
 }
 
@@ -233,12 +228,6 @@ function addSession(workspace, name, groupId) {
     state: 'idle',
   };
   workspace.sessions.push(session);
-
-  const group = workspace.groups.find(g => g.id === targetGroupId);
-  if (group) {
-    ensureLayoutForCount(group, groupSessionIds(workspace, group.id));
-    placeSessionInLayout(group, session.id);
-  }
   return session;
 }
 
@@ -247,8 +236,6 @@ function deleteSession(workspace, id) {
   if (idx < 0) return false;
   const { groupId } = workspace.sessions[idx];
   workspace.sessions.splice(idx, 1);
-  const group = workspace.groups.find(g => g.id === groupId);
-  if (group) ensureLayoutForCount(group, groupSessionIds(workspace, group.id));
   return true;
 }
 
@@ -286,14 +273,6 @@ function moveSessionToGroup(workspace, sessionId, groupId) {
   if (session.state !== 'idle') return null;
   const fromGroupId = session.groupId;
   session.groupId = groupId;
-  [fromGroupId, groupId].forEach(gid => {
-    if (gid === null) return;
-    const group = workspace.groups.find(g => g.id === gid);
-    if (group) {
-      ensureLayoutForCount(group, groupSessionIds(workspace, gid));
-      if (gid === groupId) placeSessionInLayout(group, session.id);
-    }
-  });
   return session;
 }
 
@@ -336,7 +315,7 @@ module.exports = {
   loadWorkspace, saveWorkspace,
   addSession, deleteSession, renameSession, reorderSession, moveSessionToGroup, setSessionMuted,
   addGroup, deleteGroup, renameGroup, updateGroup,
-  ensureLayoutForCount, placeSessionInLayout,
-  setLayoutRatios, swapLayoutCells, setLayoutManual, applyResizeHint,
+  recomputeLayoutForActive,
+  setLayoutRatios, swapLayoutCells,
   groupSessionIds,
 };
