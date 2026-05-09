@@ -221,7 +221,7 @@ function attachRowDividerDrag(el, index) {
 function createWrapper(session) {
   const wrap = document.createElement('div');
   wrap.className = 'webview-wrap';
-  wrap.style.setProperty('--accent', session.accentColor || '#f59e0b');
+  wrap.style.setProperty('--accent', session.accentColor || '#14b8a6');
 
   const wv = document.createElement('webview');
   wv.setAttribute('partition', `persist:${session.id}`);
@@ -243,7 +243,7 @@ function createWrapper(session) {
   label.className = 'session-label';
   const dot = document.createElement('span');
   dot.className = 'dot';
-  dot.style.background = session.accentColor || '#f59e0b';
+  dot.style.background = session.accentColor || '#14b8a6';
   const name = document.createElement('span');
   name.className = 'name';
   name.textContent = session.name || 'Session';
@@ -314,12 +314,12 @@ function createWrapper(session) {
 function syncLabel(session) {
   const wrap = wrappers.get(session.id);
   if (!wrap) return;
-  wrap.style.setProperty('--accent', session.accentColor || '#f59e0b');
+  wrap.style.setProperty('--accent', session.accentColor || '#14b8a6');
   const label = wrap.querySelector('.session-label');
   if (!label) return;
   const dot  = label.querySelector('.dot');
   const name = label.querySelector('.name');
-  if (dot)  dot.style.background = session.accentColor || '#f59e0b';
+  if (dot)  dot.style.background = session.accentColor || '#14b8a6';
   if (name) name.textContent     = session.name || 'Session';
 }
 
@@ -349,7 +349,7 @@ function attachLabelDrag(wrap, label, sessionId) {
     const fromCell = wrap.dataset.cell;
     // Highlight target cell (works for empty cells too, where no wrapper exists).
     const highlight = document.createElement('div');
-    highlight.style.cssText = 'position:absolute;pointer-events:none;outline:3px solid var(--accent,#f59e0b);outline-offset:-3px;background:rgba(245,158,11,0.18);box-sizing:border-box;display:none;';
+    highlight.style.cssText = 'position:absolute;pointer-events:none;outline:3px solid var(--accent,#14b8a6);outline-offset:-3px;background:rgba(20,184,166,0.18);box-sizing:border-box;display:none;';
     overlay.appendChild(highlight);
 
     const onMove = ev => {
