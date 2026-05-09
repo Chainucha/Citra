@@ -7,11 +7,12 @@ ToS-compliant multi-client launcher for Flyff Universe. Manage many accounts in 
 - **Groups** — organize sessions into groups; each group launches in its own window so you can run multiple grid layouts simultaneously.
 - **Per-session storage** — every account gets its own persistent Chromium partition (`persist:<sessionId>`); cookies and localStorage stay isolated.
 - **CSS Grid layouts** — sessions tile into an N-column × M-row grid that auto-fits the container's aspect ratio. Drag dividers live to adjust column/row ratios, then lock the topology.
-- **Drag-and-swap** — enable "Edit Position" on any session badge to drag it onto another cell and swap positions without reloading either webview.
+- **Drag-and-swap panes** — enable "Edit Position" on any session badge to drag it onto another grid cell and swap positions without reloading either webview.
+- **Drag-and-drop reorder (dashboard)** — drag session cards within or across groups; sidebar items reorder in the flat list. Drop position (before/after) follows cursor side relative to the target's midpoint.
 - **Reorder + rename** — move sessions within the workspace and rename without restarting them. Reordering updates grid placement only — no webview reload.
 - **Focus indicator** — accent-colored session badge highlights the focused pane.
 - **Global hotkeys** — per-session accelerators focus an account from anywhere. `Tab` cycles focus inside the active group window. `F11` toggles fullscreen; `F10` zooms the focused pane (hides all others) and restores on a second press.
-- **Hover focus** (optional) — automatically focus a pane when the mouse hovers over it for a configurable delay.
+- **Hover focus** (optional) — automatically focus a pane when the mouse hovers over it for a configurable delay (default 30ms).
 - **Manage Panel from any pane** — each session badge has a dropdown to reopen the dashboard. If the manager window was closed, it is recreated; otherwise restored and focused.
 - **Manager stays in front on launch** — launching a group spawns the container window without stealing focus from the dashboard, so you can keep managing while the panes load.
 
@@ -24,14 +25,14 @@ The main process owns all OS-level state (HWNDs, hotkeys, workspace persistence)
 ## Install
 
 1. Go to the [Releases](../../releases/latest) page.
-2. Download `Citra-Setup-*.exe`.
+2. Download `Phayura-Setup-*.exe`.
 3. Run the installer — no admin rights required.
 
-Citra auto-updates are not yet implemented; check Releases for new versions manually.
+Phayura auto-updates are not yet implemented; check Releases for new versions manually.
 
 ## Compliance boundary
 
-Citra never injects input, never reads game memory, and never attaches a debugger. Win32 usage is limited to window placement and focus (`SetWindowPos`, `SetForegroundWindow`, `AttachThreadInput`, `GetWindowRect`). The deliberately-omitted API list is documented in `src/main/win32/bindings.js`; adding any of those should be flagged in review.
+Phayura never injects input, never reads game memory, and never attaches a debugger. Win32 usage is limited to window placement and focus (`SetWindowPos`, `SetForegroundWindow`, `AttachThreadInput`, `GetWindowRect`) plus read-only cursor tracking for hover-focus (`GetCursorPos`, `WindowFromPoint`). The deliberately-omitted API list is documented in `src/main/win32/bindings.js`; adding any of those should be flagged in review.
 
 ## Develop
 
@@ -42,7 +43,7 @@ NODE_ENV=dev npm start    # also opens DevTools
 npm run build             # NSIS installer → dist/
 ```
 
-Stack: Electron 41 · Node 20 · koffi 2.10 (Win32 FFI) · electron-store 8 · uiohook-napi 1.5 (optional hover focus) · vanilla HTML/JS (no TypeScript, no bundler).
+Stack: Electron 41 · Node 20 · koffi 2.10 (Win32 FFI) · electron-store 8 · vanilla HTML/JS (no TypeScript, no bundler).
 
 ## Status
 
