@@ -149,18 +149,20 @@ function groupSessionIds(workspace, groupId) {
 // new actives fill empty cells. Called on session start/stop.
 function topologyKey(cols, rows) { return `${cols}x${rows}`; }
 
-// Stash current ratios into per-topology cache. Called before topology change
-// or on user-driven save, so a future reopen with the same topology can restore.
-function snapshotRatios(layout) {
+// Stash current ratios + cellMap into per-topology cache. Called before topology
+// change, on user-driven ratio save, and on user-driven cell swap, so a future
+// reopen with the same topology can restore both divider positions and pane order.
+function snapshotTopology(layout) {
   if (!layout.cols || !layout.rows) return;
   if (!layout.savedRatios) layout.savedRatios = {};
   layout.savedRatios[topologyKey(layout.cols, layout.rows)] = {
     colRatios: layout.colRatios.slice(),
     rowRatios: layout.rowRatios.slice(),
+    cellMap: { ...layout.cellMap },
   };
 }
 
-function restoreOrUniform(layout, cols, rows) {
+function restoreRatiosOrUniform(layout, cols, rows) {
   const cache = layout.savedRatios?.[topologyKey(cols, rows)];
   if (cache && Array.isArray(cache.colRatios) && cache.colRatios.length === cols
            && Array.isArray(cache.rowRatios) && cache.rowRatios.length === rows) {
@@ -169,13 +171,41 @@ function restoreOrUniform(layout, cols, rows) {
   return { colRatios: uniformRatios(cols), rowRatios: uniformRatios(rows) };
 }
 
+// Reconcile cached cellMap with current active set: drop stale ids, fill empties
+// with active ids missing from cache (row-major). Returns null if no usable cache,
+// caller falls back to rebuildCellMap.
+function restoreCellMap(layout, cols, rows, activeIds) {
+  const cache = layout.savedRatios?.[topologyKey(cols, rows)];
+  if (!cache || !cache.cellMap || typeof cache.cellMap !== 'object') return null;
+  const valid = new Set(activeIds);
+  const restored = {};
+  for (const k of Object.keys(cache.cellMap)) {
+    const m = /^(\d+),(\d+)$/.exec(k);
+    if (!m) continue;
+    const r = +m[1], c = +m[2];
+    if (r >= rows || c >= cols) continue;
+    const id = cache.cellMap[k];
+    if (valid.has(id) && !Object.values(restored).includes(id)) restored[k] = id;
+  }
+  const placed = new Set(Object.values(restored));
+  const missing = activeIds.filter(id => !placed.has(id));
+  let mi = 0;
+  for (let r = 0; r < rows && mi < missing.length; r++) {
+    for (let c = 0; c < cols && mi < missing.length; c++) {
+      const k = cellKey(r, c);
+      if (!restored[k]) restored[k] = missing[mi++];
+    }
+  }
+  return restored;
+}
+
 function recomputeLayoutForActive(group, activeIds, hintW = DEFAULT_W, hintH = DEFAULT_H) {
   const layout = group.layout;
   const N = activeIds.length;
 
   if (N === 0) {
     // Don't wipe savedRatios — preserve user customizations across full close.
-    snapshotRatios(layout);
+    snapshotTopology(layout);
     layout.cols = 0; layout.rows = 0;
     layout.colRatios = []; layout.rowRatios = [];
     layout.cellMap = {};
@@ -206,14 +236,18 @@ function recomputeLayoutForActive(group, activeIds, hintW = DEFAULT_W, hintH = D
     return;
   }
 
-  // Topology changed — snapshot current, rebuild cellMap, restore matching saved ratios or uniform.
-  snapshotRatios(layout);
-  layout.cellMap = rebuildCellMap(filtered, layout.cols, layout.rows, cols, rows, activeIds);
+  // Topology changed — snapshot current, then restore cached cellMap+ratios for
+  // the new topology if present, otherwise rebuild and use uniform ratios.
+  snapshotTopology(layout);
+  const oldCols = layout.cols, oldRows = layout.rows;
   layout.cols = cols;
   layout.rows = rows;
-  const restored = restoreOrUniform(layout, cols, rows);
-  layout.colRatios = restored.colRatios;
-  layout.rowRatios = restored.rowRatios;
+  const restoredCells = restoreCellMap(layout, cols, rows, activeIds);
+  layout.cellMap = restoredCells
+    ?? rebuildCellMap(filtered, oldCols, oldRows, cols, rows, activeIds);
+  const restoredRatios = restoreRatiosOrUniform(layout, cols, rows);
+  layout.colRatios = restoredRatios.colRatios;
+  layout.rowRatios = restoredRatios.rowRatios;
 }
 
 function setLayoutRatios(group, colRatios, rowRatios) {
@@ -221,7 +255,7 @@ function setLayoutRatios(group, colRatios, rowRatios) {
   layout.colRatios = normalizeRatios(colRatios, layout.cols);
   layout.rowRatios = normalizeRatios(rowRatios, layout.rows);
   // Persist user choice so future topology returns restore it.
-  snapshotRatios(layout);
+  snapshotTopology(layout);
 }
 
 // Move pane from fromCell to toCell.
@@ -234,6 +268,8 @@ function swapLayoutCells(group, fromCell, toCell) {
   if (fromCell === toCell) return false;
   if (b) layout.cellMap[fromCell] = b; else delete layout.cellMap[fromCell];
   layout.cellMap[toCell] = a;
+  // Persist user pane arrangement so future topology returns restore it.
+  snapshotTopology(layout);
   return true;
 }
 
