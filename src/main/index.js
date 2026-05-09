@@ -42,6 +42,34 @@ const workspace = loadWorkspace();
 
 let dashboard;
 
+// Explicit focus tracking. Electron's per-window `isFocused()` can lag after
+// 'blur' fires (OS focus event hasn't propagated yet), so we maintain our own
+// Set updated synchronously by per-window focus/blur listeners. Disarm only when
+// no Phayura window is in the Set.
+const focusedWindows = new Set();
+
+function attachFocusTracking(win) {
+  win.on('focus', () => {
+    focusedWindows.add(win);
+    enableSessionHotkeys();
+  });
+  win.on('blur', () => {
+    focusedWindows.delete(win);
+    setImmediate(() => {
+      if (focusedWindows.size === 0) disableSessionHotkeys();
+    });
+  });
+  win.on('closed', () => {
+    focusedWindows.delete(win);
+    if (focusedWindows.size === 0) disableSessionHotkeys();
+  });
+  // Bootstrap: catch initial focus that may have fired before the listener attached.
+  if (win.isFocused()) {
+    focusedWindows.add(win);
+    enableSessionHotkeys();
+  }
+}
+
 function safeSend(channel, payload) {
   if (dashboard && !dashboard.isDestroyed()) {
     dashboard.webContents.send(channel, payload);
@@ -142,6 +170,7 @@ function ensureGroupContainer(groupId) {
     container.on('focus', enableContainerHotkeys);
     container.on('blur',  disableContainerHotkeys);
     if (container.isFocused()) enableContainerHotkeys();
+    attachFocusTracking(container);
     container.__hotkeysWired = true;
   }
   return container;
@@ -216,21 +245,12 @@ function createDashboard() {
     },
   });
   dashboard.loadFile(path.join(__dirname, '../renderer/dashboard/index.html'));
+  attachFocusTracking(dashboard);
   if (!app.isPackaged) dashboard.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
   if (app.isPackaged) Menu.setApplicationMenu(null);
-
-  app.on('browser-window-focus', () => {
-    enableSessionHotkeys();
-  });
-  app.on('browser-window-blur', () => {
-    setImmediate(() => {
-      const anyFocused = BrowserWindow.getAllWindows().some(w => !w.isDestroyed() && w.isFocused());
-      if (!anyFocused) disableSessionHotkeys();
-    });
-  });
 
   createDashboard();
   applyHoverFocus();
