@@ -243,3 +243,33 @@ body { background: var(--bg-base); color: var(--text); font-family: system-ui, s
 #dlg-add-group:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(20,184,166,.25); }
 .dlg-label { margin-bottom: 8px; }
 .dlg-actions { margin-top: 12px; }
+
+/* Help dialog */
+#dlg-help {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  margin: 0;
+  background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); padding: 0; max-width: 640px; width: 90vw; max-height: 85vh;
+}
+#dlg-help::backdrop { background: rgba(0,0,0,0.6); }
+.help-form { display: flex; flex-direction: column; max-height: 85vh; }
+.help-header { display: flex; align-items: center; justify-content: space-between;
+               padding: 16px 20px; border-bottom: 1px solid var(--border-soft);
+               background: var(--bg-base); border-radius: 10px 10px 0 0; }
+.help-title { font-size: 18px; font-weight: 700; color: var(--accent); margin: 0; }
+.help-close { background: transparent; border: none; color: var(--text-mute);
+              cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 4px; }
+.help-close:hover { color: var(--danger); background: var(--bg-card); }
+.help-body { padding: 20px; overflow-y: auto; flex: 1; }
+.help-body section { margin-bottom: 20px; }
+.help-body section:last-child { margin-bottom: 0; }
+.help-body h3 { font-size: 14px; color: var(--accent); margin-bottom: 8px;
+                text-transform: uppercase; letter-spacing: .04em; }
+.help-body p, .help-body li { font-size: 13px; line-height: 1.6; color: var(--text-dim); }
+.help-body ol, .help-body ul { padding-left: 22px; }
+.help-body li { margin-bottom: 4px; }
+.help-body strong { color: var(--text); font-weight: 600; }
+.help-body .hotkey-table { font-size: 12px; margin: 6px 0; }
+.help-body .hotkey-table td { padding: 3px 16px 3px 0; color: var(--text-dim); }
+.help-body .hotkey-table td:first-child { font-family: monospace; color: var(--accent); white-space: nowrap; }
+.help-body .note { font-size: 11px; color: var(--text-mute); margin-top: 6px; font-style: italic; }

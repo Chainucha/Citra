@@ -495,6 +495,11 @@ document.getElementById('btn-kofi').addEventListener('click', () => {
   window.citra.openKofi();
 });
 
+const dlgHelp = document.getElementById('dlg-help');
+document.getElementById('btn-help').addEventListener('click', () => dlgHelp.showModal());
+document.getElementById('dlg-help-close').addEventListener('click', () => dlgHelp.close());
+dlgHelp.addEventListener('click', (e) => { if (e.target === dlgHelp) dlgHelp.close(); });
+
 dlgGroup.querySelector('form').addEventListener('submit', () => { groupSubmit = true; });
 document.getElementById('dlg-group-cancel').addEventListener('click', () => dlgGroup.close());
 

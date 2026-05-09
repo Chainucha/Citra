@@ -41,6 +41,7 @@
       <section class="panel-section">
         <div class="action-row">
           <button id="btn-hover" class="btn-toggle" aria-pressed="false">Hover Focus: Off</button>
+          <button id="btn-help" class="btn-toggle" title="How to use Phayura">? Help</button>
           <span id="status-msg" class="status"></span>
         </div>
       </section>
@@ -81,6 +82,72 @@
       <div class="action-row dlg-actions">
         <button type="submit" id="dlg-rename-ok" class="btn-primary">Save</button>
         <button type="button" id="dlg-rename-cancel" class="btn-secondary">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Help / Instructions dialog -->
+  <dialog id="dlg-help">
+    <form method="dialog" class="help-form">
+      <header class="help-header">
+        <h2 class="help-title">How to use Phayura</h2>
+        <button type="button" id="dlg-help-close" class="help-close" aria-label="Close">&#10005;</button>
+      </header>
+      <div class="help-body">
+        <section>
+          <h3>1. Getting started</h3>
+          <ol>
+            <li>Click <strong>+ Add Session</strong> in the sidebar to add an account. Name it and pick a group (or leave ungrouped).</li>
+            <li>Click <strong>+ Add Group</strong> to create a new container window. Each group launches in its own window.</li>
+            <li>From the group section, click <strong>Launch Group</strong> (or <strong>Launch</strong> on a single card) to open the game.</li>
+            <li>Login on each pane with a different Flyff account. Cookies are isolated per session.</li>
+          </ol>
+        </section>
+
+        <section>
+          <h3>2. Hotkeys (only inside a group window)</h3>
+          <table class="hotkey-table">
+            <tr><td>Tab</td><td>Cycle focus across panes</td></tr>
+            <tr><td>F11</td><td>Toggle window fullscreen</td></tr>
+            <tr><td>F10</td><td>Zoom focused pane (hide others); press again to restore</td></tr>
+            <!-- <tr><td>Custom</td><td>Set per-session hotkey to focus that account from anywhere</td></tr> -->
+          </table>
+          <p class="note">Hotkeys only switch which pane is focused. They are never injected into the game.</p>
+        </section>
+
+        <section>
+          <h3>3. Layout</h3>
+          <ul>
+            <li>Grid auto-fits the window aspect ratio. Resize the window to change topology.</li>
+            <li>Drag the dark dividers between panes to adjust column/row ratios.</li>
+            <li>Open the session-label dropdown (▽ on the badge) → <strong>Edit Position</strong> to drag a pane onto another cell to swap.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>4. Drag &amp; drop in dashboard</h3>
+          <ul>
+            <li><strong>Sidebar</strong>: drag sessions to reorder the flat list (group unchanged).</li>
+            <li><strong>Cards</strong>: drag onto another card to place before/after; cursor side decides direction.</li>
+            <li><strong>Group section</strong>: drop on empty area to move into that group at the end.</li>
+            <li><strong>Ungrouped</strong>: drop into the UNGROUPED section to remove from group.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>5. Hover focus (optional)</h3>
+          <p>Toggle <strong>Hover Focus</strong> in the top bar. When on, hovering the mouse over a pane focuses it after a short delay (default 30ms). Useful when juggling many accounts without pressing keys.</p>
+        </section>
+
+        <section>
+          <h3>6. Reaching the dashboard from inside a pane</h3>
+          <p>Click the session badge (top-left of any pane) → <strong>Manage Panel</strong>. Reopens the dashboard if closed.</p>
+        </section>
+
+        <section>
+          <h3>7. Compliance</h3>
+          <p>Phayura never injects input, reads game memory, or attaches a debugger. It only places windows and tracks the cursor (read-only). Safe to use without violating Flyff Universe ToS.</p>
+        </section>
       </div>
     </form>
   </dialog>
